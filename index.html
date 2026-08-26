@@ -3,252 +3,274 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <title>UP TV</title>
 
 <style>
 *{box-sizing:border-box}
 
 html,body{
-margin:0;
-width:100%;
-height:100%;
-overflow:hidden;
-background:#000;
-color:#fff;
-font-family:Arial,sans-serif
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  color:#fff;
+  font-family:Arial,Helvetica,sans-serif
 }
 
 :root{
---pink:#ff1493;
---panel:#0d0d12;
---line:#292933;
---muted:#999
+  --pink:#ff1493;
+  --panel:#0d0d12;
+  --line:#292933;
+  --muted:#999;
+  --soft:#d5d5db
 }
 
 .app{
-height:100dvh;
-display:grid;
-grid-template-rows:1fr auto
+  height:100dvh;
+  display:grid;
+  grid-template-rows:1fr auto;
+  min-height:0
 }
 
 .main{
-position:relative;
-min-height:0;
-overflow:hidden
+  position:relative;
+  min-height:0;
+  overflow:hidden
 }
 
 .top{
-position:absolute;
-z-index:3;
-top:clamp(18px,3vw,40px);
-left:clamp(20px,4vw,60px);
-color:var(--pink);
-font-weight:700;
-letter-spacing:.16em;
-font-size:clamp(12px,1.4vw,20px)
+  position:absolute;
+  z-index:10;
+  top:clamp(18px,3vw,40px);
+  left:clamp(20px,4vw,60px);
+  color:var(--pink);
+  font-weight:700;
+  letter-spacing:.16em;
+  font-size:clamp(12px,1.4vw,20px)
 }
 
 .status{
-position:absolute;
-z-index:3;
-right:25px;
-top:25px;
-color:#777;
-font-size:12px
+  position:absolute;
+  z-index:10;
+  right:25px;
+  top:25px;
+  color:#777;
+  font-size:clamp(11px,1.1vw,15px);
+  transition:color .3s
 }
 
 .slide{
-position:absolute;
-inset:0;
-padding:10vh 8vw 30px;
-display:flex;
-align-items:center;
-opacity:0;
-transform:translateX(3%);
-transition:.7s
+  position:absolute;
+  inset:0;
+  padding:10vh 8vw 30px;
+  display:flex;
+  align-items:center;
+  opacity:0;
+  visibility:hidden;
+  transform:translateX(3%);
+  transition:opacity .7s ease,transform .7s ease,visibility .7s
 }
 
 .slide.active{
-opacity:1;
-transform:none
+  opacity:1;
+  visibility:visible;
+  transform:none
 }
 
 .content{
-max-width:1250px
+  width:100%;
+  max-width:1250px
 }
 
 .kicker{
-color:var(--pink);
-font-weight:700;
-letter-spacing:.15em;
-font-size:clamp(12px,1.3vw,20px);
-margin-bottom:18px
+  color:var(--pink);
+  font-weight:700;
+  letter-spacing:.15em;
+  font-size:clamp(12px,1.3vw,20px);
+  margin-bottom:18px
 }
 
 h1{
-font-size:clamp(32px,5.5vw,84px);
-line-height:1.02;
-letter-spacing:-.04em;
-margin:0 0 22px;
-max-width:1200px
+  font-size:clamp(32px,5.5vw,84px);
+  line-height:1.02;
+  letter-spacing:-.04em;
+  margin:0 0 22px;
+  max-width:1200px
 }
 
 .desc{
-font-size:clamp(16px,2vw,28px);
-line-height:1.35;
-color:#d5d5db;
-max-width:950px
+  font-size:clamp(16px,2vw,28px);
+  line-height:1.35;
+  color:var(--soft);
+  max-width:950px
 }
 
 .source{
-color:#85858d;
-font-size:clamp(11px,1.1vw,16px);
-margin-top:22px
+  color:#85858d;
+  font-size:clamp(11px,1.1vw,16px);
+  margin-top:22px
 }
 
 .dots{
-position:absolute;
-right:25px;
-top:50%;
-display:flex;
-flex-direction:column;
-gap:10px
+  position:absolute;
+  z-index:10;
+  right:25px;
+  top:50%;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  transform:translateY(-50%)
 }
 
 .dot{
-width:7px;
-height:7px;
-border-radius:50%;
-background:#555
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#555;
+  transition:.3s
 }
 
 .dot.active{
-background:var(--pink);
-transform:scale(1.5)
+  background:var(--pink);
+  transform:scale(1.5)
 }
 
 .footer{
-display:grid;
-grid-template-columns:1.15fr repeat(4,1fr);
-background:var(--panel);
-border-top:1px solid var(--line)
+  display:grid;
+  grid-template-columns:1.15fr repeat(4,1fr);
+  background:var(--panel);
+  border-top:1px solid var(--line);
+  position:relative;
+  z-index:20
 }
 
 .box{
-min-height:90px;
-padding:14px 20px;
-border-right:1px solid var(--line);
-display:flex;
-flex-direction:column;
-justify-content:center
+  min-height:90px;
+  padding:14px 20px;
+  border-right:1px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  justify-content:center
 }
 
 .box:last-child{
-border:0
+  border:0
 }
 
 .label{
-font-size:11px;
-letter-spacing:.15em;
-color:#85858e;
-margin-bottom:7px
+  font-size:11px;
+  letter-spacing:.15em;
+  color:#85858e;
+  margin-bottom:7px
 }
 
 .value{
-font-size:clamp(20px,2.1vw,31px);
-font-weight:700
+  font-size:clamp(20px,2.1vw,31px);
+  font-weight:700
 }
 
 .sub{
-font-size:11px;
-color:#777;
-margin-top:4px
+  font-size:11px;
+  color:#777;
+  margin-top:4px
 }
 
 .logo-box{
-text-align:center;
-align-items:center
+  text-align:center;
+  align-items:center
 }
 
 .logo{
-font-size:clamp(28px,3vw,44px);
-font-weight:800;
-letter-spacing:-.05em
+  font-size:clamp(28px,3vw,44px);
+  font-weight:800;
+  letter-spacing:-.05em
 }
 
 .logo span{
-color:var(--pink)
+  color:var(--pink)
 }
 
 .caption{
-font-size:9px;
-color:#777;
-letter-spacing:.18em
+  font-size:9px;
+  color:#777;
+  letter-spacing:.18em
 }
 
 .ticker{
-height:58px;
-background:var(--pink);
-color:#000;
-display:flex;
-align-items:center;
-gap:25px;
-padding:10px 3vw;
-overflow:hidden
+  height:58px;
+  background:var(--pink);
+  color:#000;
+  display:flex;
+  align-items:center;
+  gap:25px;
+  padding:10px 3vw;
+  overflow:hidden;
+  position:relative;
+  z-index:30
 }
 
 .ticker b{
-font-size:12px;
-letter-spacing:.15em
+  flex:0 0 auto;
+  font-size:12px;
+  letter-spacing:.15em
 }
 
 .ticker span{
-font-size:clamp(14px,1.5vw,22px);
-font-weight:700;
-overflow:hidden;
-text-overflow:ellipsis;
-white-space:nowrap
+  font-size:clamp(14px,1.5vw,22px);
+  font-weight:700;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
 }
 
 @media(max-width:700px){
 
-.slide{
-padding:18vh 22px 30px;
-align-items:flex-start
-}
+  .slide{
+    padding:18vh 22px 30px;
+    align-items:flex-start
+  }
 
-.status{
-top:20px;
-right:18px
-}
+  .status{
+    top:20px;
+    right:18px
+  }
 
-.footer{
-grid-template-columns:1fr 1fr
-}
+  .footer{
+    grid-template-columns:1fr 1fr
+  }
 
-.logo-box{
-grid-column:1/-1;
-min-height:64px
-}
+  .logo-box{
+    grid-column:1/-1;
+    min-height:64px
+  }
 
-.box{
-min-height:70px;
-padding:10px 14px
-}
+  .box{
+    min-height:70px;
+    padding:10px 14px
+  }
 
-.ticker{
-height:52px;
-padding:8px 14px
-}
+  .ticker{
+    height:52px;
+    padding:8px 14px
+  }
 
-.ticker b{
-display:none
-}
+  .ticker b{
+    display:none
+  }
 
-.dots{
-right:12px
-}
+  .dots{
+    right:12px
+  }
 
+  h1{
+    max-width:calc(100% - 20px)
+  }
+
+  .desc{
+    max-width:calc(100% - 15px)
+  }
 }
 </style>
 </head>
@@ -259,24 +281,240 @@ right:12px
 
 <main class="main">
 
-<div class="top">UP TV • AO VIVO</div>
+  <div class="top">UP TV • AO VIVO</div>
 
-<div class="status" id="status">
-iniciando...
+  <div class="status" id="status">iniciando...</div>
+
+  <section class="slide active">
+    <div class="content">
+      <div class="kicker">UP TV</div>
+      <h1>Painel de notícias para televisão.</h1>
+      <div class="desc">
+        As principais manchetes do dia em uma tela automática, responsiva e preparada para TV, computador e celular.
+      </div>
+      <div class="source">UP TV • Atualização automática</div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="content">
+      <div class="kicker">TECNOLOGIA</div>
+      <h1>Inteligência artificial avança e transforma a rotina das empresas.</h1>
+      <div class="desc">
+        Novas ferramentas ampliam a automação, a análise de dados e a produtividade em diferentes setores.
+      </div>
+      <div class="source">UP TV • Tecnologia</div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="content">
+      <div class="kicker">NEGÓCIOS</div>
+      <h1>Empresas aceleram investimentos em inovação e transformação digital.</h1>
+      <div class="desc">
+        Organizações buscam combinar eficiência operacional, experiência do cliente e novas tecnologias.
+      </div>
+      <div class="source">UP TV • Negócios</div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="content">
+      <div class="kicker">BRASIL</div>
+      <h1>Novos projetos movimentam diferentes setores da economia brasileira.</h1>
+      <div class="desc">
+        Mercado, tecnologia e inovação seguem entre os temas que concentram a atenção das empresas.
+      </div>
+      <div class="source">UP TV • Brasil</div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="content">
+      <div class="kicker">INOVAÇÃO</div>
+      <h1>Inovação ganha espaço nas estratégias de crescimento.</h1>
+      <div class="desc">
+        Empresas investem em soluções capazes de simplificar processos e criar novas oportunidades.
+      </div>
+      <div class="source">UP TV • Inovação</div>
+    </div>
+  </section>
+
+  <div class="dots" id="dots" aria-label="Navegação das notícias"></div>
+
+</main>
+
+<footer>
+
+  <div class="footer">
+
+    <div class="box logo-box">
+      <div class="logo">UP <span>TV</span></div>
+      <div class="caption">PAINEL DE NOTÍCIAS</div>
+    </div>
+
+    <div class="box">
+      <div class="label">EDIÇÃO</div>
+      <div class="value" id="edition">AO VIVO</div>
+      <div class="sub" id="date">--/--/----</div>
+    </div>
+
+    <div class="box">
+      <div class="label">NOTÍCIAS</div>
+      <div class="value" id="count">05</div>
+      <div class="sub">manchetes</div>
+    </div>
+
+    <div class="box">
+      <div class="label">ATUALIZAÇÃO</div>
+      <div class="value" id="clock">--:--</div>
+      <div class="sub">horário local</div>
+    </div>
+
+    <div class="box">
+      <div class="label">STATUS</div>
+      <div class="value" id="live">ONLINE</div>
+      <div class="sub">sistema ativo</div>
+    </div>
+
+  </div>
+
+  <div class="ticker">
+    <b>ÚLTIMA HORA</b>
+    <span id="tickerText">UP TV • Painel de notícias ativo.</span>
+  </div>
+
+</footer>
+
 </div>
 
-<section class="slide active">
+<script>
+(function(){
 
-<div class="content">
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dots = document.getElementById('dots');
+  const status = document.getElementById('status');
+  const tickerText = document.getElementById('tickerText');
+  const clock = document.getElementById('clock');
+  const date = document.getElementById('date');
+  const count = document.getElementById('count');
 
-<div class="kicker">UP TV</div>
+  let current = 0;
+  const interval = 8000;
 
-<h1>
-Painel de notícias para televisão.
-</h1>
+  count.textContent = String(slides.length).padStart(2,'0');
 
-<div class="desc">
-As principais manchetes do dia em uma tela automática, responsiva e preparada para TV, computador e celular.
-</div>
+  slides.forEach((slide,index)=>{
+    const dot = document.createElement('div');
 
-<div class="source">
+    dot.className = 'dot' + (index === 0 ? ' active' : '');
+
+    dot.setAttribute(
+      'aria-label',
+      'Notícia ' + (index + 1)
+    );
+
+    dot.addEventListener('click',()=>{
+      showSlide(index);
+      restart();
+    });
+
+    dots.appendChild(dot);
+  });
+
+  const dotItems = Array.from(dots.children);
+
+  function showSlide(index){
+
+    current = (index + slides.length) % slides.length;
+
+    slides.forEach((slide,i)=>{
+      slide.classList.toggle(
+        'active',
+        i === current
+      );
+    });
+
+    dotItems.forEach((dot,i)=>{
+      dot.classList.toggle(
+        'active',
+        i === current
+      );
+    });
+
+    const headline =
+      slides[current].querySelector('h1');
+
+    if(headline){
+      tickerText.textContent =
+        headline.textContent.trim();
+    }
+  }
+
+  function next(){
+    showSlide(current + 1);
+  }
+
+  let timer =
+    setInterval(next,interval);
+
+  function restart(){
+
+    clearInterval(timer);
+
+    timer =
+      setInterval(next,interval);
+  }
+
+  function updateClock(){
+
+    const now = new Date();
+
+    const hours =
+      String(now.getHours()).padStart(2,'0');
+
+    const minutes =
+      String(now.getMinutes()).padStart(2,'0');
+
+    clock.textContent =
+      hours + ':' + minutes;
+
+    date.textContent =
+      String(now.getDate()).padStart(2,'0') + '/' +
+      String(now.getMonth()+1).padStart(2,'0') + '/' +
+      now.getFullYear();
+
+    status.textContent =
+      'ao vivo • atualizado agora';
+  }
+
+  updateClock();
+
+  setInterval(
+    updateClock,
+    1000
+  );
+
+  showSlide(0);
+
+  document.addEventListener(
+    'visibilitychange',
+    ()=>{
+      if(document.hidden){
+
+        clearInterval(timer);
+
+      }else{
+
+        restart();
+        updateClock();
+
+      }
+    }
+  );
+
+})();
+</script>
+
+</body>
+</html>
