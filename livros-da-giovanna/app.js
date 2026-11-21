@@ -12,8 +12,8 @@ let db = load();
 let year = new Date().getFullYear();
 
 function load() {
-  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && Array.isArray(d.books)) return { profile: { name: '', bio: '', photo: '', favorites: [], ...d.profile }, books: d.books, seeded: !!d.seeded, posts: d.posts || [], social: d.social || {}, coverRetry: !!d.coverRetry, postsSeeded: !!d.postsSeeded }; } catch {}
-  return { profile: { name: '', bio: '', photo: '', favorites: [] }, books: [], seeded: false, posts: [], social: {}, coverRetry: false, postsSeeded: false };
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && Array.isArray(d.books)) return { profile: { name: '', bio: '', photo: '', favorites: [], ...d.profile }, books: d.books, seeded: !!d.seeded, posts: d.posts || [], social: d.social || {}, coverRetry: !!d.coverRetry, postsSeeded: !!d.postsSeeded, news: d.news || {} }; } catch {}
+  return { profile: { name: '', bio: '', photo: '', favorites: [] }, books: [], seeded: false, posts: [], social: {}, coverRetry: false, postsSeeded: false, news: {} };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { toast('Não foi possível salvar: armazenamento cheio.'); } }
 let tt; function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2400); }
@@ -87,10 +87,14 @@ function seed() {
     const by = t => db.books.find(b => b.title === t)?.id;
     db.profile.favorites = ['Torto Arado', 'O Pequeno Príncipe', '1984', 'Dom Casmurro'].map(by).filter(Boolean);
   }
-  Object.assign(db.profile, { name: db.profile.name || "Giovanna", mascot: db.profile.mascot || "", bg: db.profile.bg || 0, stickers: db.profile.stickers || ["♡", "✿", "☁", "✦"], goal: db.profile.goal || 12 });
+  Object.assign(db.profile, { name: db.profile.name || "Giovanna", mascot: db.profile.mascot || "", bg: db.profile.bg || 0, stickers: db.profile.stickers || ['✿', '☁', '✦', '☾'], goal: db.profile.goal || 12 });
   db.seeded = true; save();
 }
 
+function cleanHearts() {
+  const s = (db.profile.stickers || []).map(g => (g === '♡' || g === '❥') ? '✿' : g);
+  db.profile.stickers = [...new Set(s)];
+}
 function seedPosts() {
   if (!db.postsSeeded && !db.posts.length && db.books.some(b => b.sample)) {
     const by2 = t => db.books.find(b => b.title === t)?.id || '';
@@ -99,10 +103,9 @@ function seedPosts() {
     db.posts = [
       mk('note', by2('Cem Anos de Solidão'), 'Tantos Aurelianos que já estou desenhando a árvore genealógica no caderno ✿', '2026-11-19'),
       mk('quote', '', 'Ler é uma forma de morar em outros lugares.', '2026-11-12'),
-      mk('note', by2('Grande Sertão: Veredas'), 'Primeira vez que leio devagar só pelo som das palavras ♡', '2026-11-10')
+      mk('note', by2('Grande Sertão: Veredas'), 'Primeira vez que leio devagar só pelo som das palavras ✿', '2026-11-10')
     ];
-    db.social['post:' + db.posts[0].id] = { liked: true, saved: false, comments: [{ id: uid(), text: 'Lembrar de comprar post-its coloridos pra marcar as páginas.', ts: T('2026-11-19') + 3600000 }] };
-    db.social['post:' + db.posts[1].id] = { liked: true, saved: true, comments: [] };
+    db.social['post:' + db.posts[1].id] = { liked: false, saved: true, comments: [] };
   }
   db.postsSeeded = true; save();
 }
@@ -207,7 +210,7 @@ function fileToCover(file, W = 360, H = 540) {
 
 /* ---------- bichinhos e símbolos ---------- */
 const BG = ['#efe4cf', '#e1d3f5', '#f3dccd', '#d9c3a0', '#eadff9', '#e5d9c0'];
-const GLYPHS = ['♡', '✿', '☁', '☾', '✦', '★', '❀', '♪', '✧', '❥', '☼', '✩'];
+const GLYPHS = ['✿', '☁', '☾', '✦', '★', '❀', '♪', '✧', '☼', '✩', '✶', '❖'];
 const EYES = '<circle cx="37" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="63" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="38.7" cy="54.3" r="1.5" fill="#fff"/><circle cx="64.7" cy="54.3" r="1.5" fill="#fff"/>';
 const CHEEK = '<ellipse cx="27" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/><ellipse cx="73" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/>';
 const MOUTH = '<ellipse cx="50" cy="62" rx="2.6" ry="1.9" fill="#2b1d3a"/><path d="M45 66 q5 5 10 0" stroke="#2b1d3a" stroke-width="2" fill="none" stroke-linecap="round"/>';
@@ -228,7 +231,7 @@ const decor = () => (db.profile.stickers || []).slice(0, 4).map((g, i) => `<span
 function companion(read, reading, goal) {
   const p = db.profile; if (!p.mascot || !MASCOTS[p.mascot]) return '';
   const n = (p.name || '').trim().split(' ')[0];
-  const msg = goal && read.length >= goal ? 'Meta batida! Que orgulho de você ♡' : reading[0] ? `Vamos continuar “${esc(reading[0].title)}”?` : read.length ? 'Que tal um livro novo? ✿' : 'Vamos começar uma leitura? ✿';
+  const msg = goal && read.length >= goal ? 'Meta batida! Que orgulho de você ✿' : reading[0] ? `Vamos continuar “${esc(reading[0].title)}”?` : read.length ? 'Que tal um livro novo? ✿' : 'Vamos começar uma leitura? ✿';
   return `<div class="companion"><div class="bubble"><b>Oi${n ? ', ' + esc(n) : ''}!</b> ${msg}</div><span class="avatar mascot" style="background:${BG[p.bg || 0] || BG[0]}">${mascotSvg(p.mascot)}</span></div>`;
 }
 function pickerHTML(st, withPhoto) {
@@ -282,8 +285,14 @@ const SCRIB = {
 };
 const scrib = (k, cls, sty) => SCRIB[k].replace('CLS', cls).replace('STY', sty);
 const tape = (cls, sty) => `<span class="tape ${cls}" style="${sty}" aria-hidden="true"></span>`;
-const clip = (cls, sty, head, text) => `<div class="clip ${cls}" style="${sty}" aria-hidden="true"><div class="clip-in"><b>${head}</b>${text}</div></div>`;
+const clip = (cls, sty, head, text, attrs = '') => `<div class="clip ${cls}" style="${sty}" ${attrs || 'aria-hidden="true"'}><div class="clip-in"><b>${head}</b>${text}</div></div>`;
 const NEWS = ['Nesta edição, as melhores páginas da semana. Leitores contam o que ficou marcado entre um capítulo e outro, e as estantes ganham novos moradores. <i>Café frio, luz baixa</i> e mais um capítulo antes de dormir. A cidade inteira parece falar de livros nas últimas noites.', 'Sebos relatam procura recorde por clássicos. Clubes de leitura se multiplicam nos bairros e há quem leia no ônibus, na fila, no intervalo. <i>Folhear devagar</i> voltou à moda, dizem as livreiras, entre uma xícara e outra.'];
+const plain = s => s.replace(/<[^>]+>/g, '');
+const newsTitle = () => (db.news.title || '').trim() || `DIÁRIO ${db.profile.name ? 'DE ' + db.profile.name.toUpperCase() : 'DE LEITURAS'}`;
+const newsText = () => (db.news.text || '').trim() || plain(NEWS[0] + ' ' + NEWS[1]);
+const clipHead = () => (db.news.clipHead || '').trim() || 'DIÁRIO DE LEITURAS';
+const clipText = () => (db.news.clipText || '').trim() || plain(NEWS[1]);
+const stampText = () => (db.news.stamp || '').trim() || 'sou um museu de tudo que já li e amei';
 function collage(kind) {
   if (kind === 'hero') return clip('', 'right:150px;top:-26px;transform:rotate(5deg)', 'A HORA DA LEITURA', NEWS[0]) +
     tape('b', 'left:34px;top:-6px;transform:rotate(-8deg)') +
@@ -318,7 +327,6 @@ const IC = {
   home: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
   books: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><path d="M16.5 5.5l4 1-3.6 14-4-1z"/></svg>',
   bookmark: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>',
-  heart: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 5.8-8 11-8 11z"/></svg>',
   chat: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
   send: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>',
   lock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
@@ -365,16 +373,11 @@ function postCard(it) {
     <header class="phead">${avatar()}<div class="pwho"><b>${esc(name)}</b><span>${ago(it.t)} · só você vê</span></div>${manual ? `<button class="ab del" data-delpost="${it.post.id}" aria-label="Apagar publicação">${IC.trash}</button>` : ''}</header>
     ${body}
     <div class="pact">
-      <button class="ab like" data-like="${esc(it.key)}" aria-pressed="${s.liked}" aria-label="Curtir">${IC.heart}<span>${s.liked ? 'Curtido' : ''}</span></button>
-      <button class="ab" data-cmt="${esc(it.key)}" aria-label="Comentar">${IC.chat}<span class="cn">${s.comments.length || ''}</span></button>
       <button class="ab save" data-save="${esc(it.key)}" aria-pressed="${s.saved}" aria-label="Salvar">${IC.bookmark}</button>
       <button class="ab" data-sharebtn="${esc(it.key)}" aria-label="Copiar texto" style="margin-left:auto">${IC.send}</button>
     </div>
-    <div class="cmts" data-cbox="${esc(it.key)}" hidden>${s.comments.map(c => cmtHTML(c)).join('')}
-      <form class="cmf" data-cform="${esc(it.key)}"><input type="text" maxlength="300" placeholder="Anotar um comentário…" aria-label="Comentário"><button class="btn sm" type="submit">Enviar</button></form></div>
   </article>`;
 }
-const cmtHTML = c => `<div class="cm">${avatar()}<div><b>${esc(db.profile.name || 'Você')}</b> ${esc(c.text)}<div class="pc">${ago(c.ts)}</div></div></div>`;
 
 function header() {
   const pin = !!db.profile.pin;
@@ -390,7 +393,9 @@ function navHTML(tab) {
 }
 function masthead() {
   const d = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-  return `<div class="mh-wrap" aria-hidden="true"><div class="masthead"><div class="mh-top"><span>DIÁRIO ${db.profile.name ? 'DE ' + esc(db.profile.name.toUpperCase()) : 'DE LEITURAS'}</span><span>${d}</span></div><div class="mh-cols">${NEWS[0]} ${NEWS[1]}</div></div></div>`;
+  return `<div class="mh-wrap" data-editnews role="button" tabindex="0" aria-label="Editar o jornal"><div class="masthead"><div class="mh-top"><span>${esc(newsTitle())}</span><span>${d}</span></div><div class="mh-cols">${esc(newsText())}</div></div><span class="editpill">✎ editar</span></div>
+
+  `;
 }
 
 function feedView() {
@@ -403,7 +408,7 @@ function feedView() {
       ${reading.map(b => `<a class="story" href="#/livro/${b.id}"><span class="lacering"><span class="thumb">${cover(b)}</span></span><span class="sl">${esc(b.title)}${b.pages ? ` · ${pct(b)}%` : ''}</span></a>`).join('')}
     </div></section>
     <button class="composer post" id="composer">${avatar()}<span>No que você está pensando, ${esc((db.profile.name || '').split(' ')[0] || 'leitora')}?</span></button>
-    ${items.length ? items.map(postCard).join('') : `<div class="empty">Sua linha do tempo está vazia. Registre uma leitura ou escreva uma nota ♡</div>`}
+    ${items.length ? items.map(postCard).join('') : `<div class="empty">Sua linha do tempo está vazia. Registre uma leitura ou escreva uma nota ✿</div>`}
     <p class="endnote">Só você vê o que está aqui ✿</p>
   </main>`;
 }
@@ -430,11 +435,11 @@ function libraryView() {
       <div class="yb-top"><button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button><span class="y">${year}</span><button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.3;cursor:default"' : ''}>›</button>
         <button class="btn sm" id="add" style="margin-left:auto">+ Livro</button></div>
       <div class="ystats"><span><b>${read.length}</b> ${read.length === 1 ? 'lido' : 'lidos'}</span><span><b>${pages.toLocaleString('pt-BR')}</b> páginas</span><span><b>${a ? fmtR(a.toFixed(1)) : '—'}</b> nota média</span></div>
-      ${goal ? `<div class="mgoal"><span>♡ Meta: ${read.length} de ${goal}</span><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
+      ${goal ? `<div class="mgoal"><span>✿ Meta: ${read.length} de ${goal}</span><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
     </section>
     ${reading.length ? `<section class="sec"><h2 class="sh"><span>Lendo agora</span></h2>${carousel(reading, b => slide(b, metaReading(b)), 'Lendo agora')}</section>` : ''}
     <section class="sec"><h2 class="sh"><span>Lidos em ${year}</span></h2>
-      ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda ♡</div>`}</section>
+      ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda ✿</div>`}</section>
     ${want.length ? `<section class="sec"><h2 class="sh"><span>Para ler</span></h2>${carousel(want, b => slide(b), 'Para ler')}</section>` : ''}
   </main>`;
 }
@@ -486,7 +491,7 @@ function profileView() {
   else if (profTab === 'year') tab = Object.keys(byYear).length ? `<div class="card years">${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="yr" data-goyear="${y}"><b>${y}</b><div class="bar"><i style="width:${byYear[y] / mx * 100}%"></i></div><span>${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div>` : '<div class="empty">Ainda sem leituras concluídas.</div>';
   else tab = mine.length ? `<div class="pgrid">${mine.map(i => i.type === 'review' ? `<a class="t3" href="#/livro/${i.book.id}">${cover(i.book)}</a>` : `<div class="t3 txt ${i.type === 'quote' ? 'q' : ''}"><span>${esc(i.post.text)}</span></div>`).join('')}</div>` : '<div class="empty">Suas publicações aparecem aqui.</div>';
   return `${header()}<main class="view prof">
-    <section class="pcardx"><div class="pbanner dots">${clip('dark', 'left:16px;top:14px;transform:rotate(-3deg)', 'DIÁRIO DE LEITURAS', NEWS[1])}${tape('b', 'left:8px;top:6px;transform:rotate(-32deg);width:70px')}${scrib('star', 'l', 'left:47%;top:20px;width:20px')}${scrib('zig', 'p', 'left:42%;bottom:24px;width:56px')}${decor()}${stamp('sou um museu de tudo que já li e amei', 'onbanner')}</div>
+    <section class="pcardx"><div class="pbanner dots">${clip('dark', 'left:16px;top:14px;transform:rotate(-3deg)', esc(clipHead()), esc(clipText()), 'data-editnews role="button" tabindex="0" aria-label="Editar o jornal"')}${tape('b', 'left:8px;top:6px;transform:rotate(-32deg);width:70px')}${scrib('star', 'l', 'left:47%;top:20px;width:20px')}${scrib('zig', 'p', 'left:42%;bottom:24px;width:56px')}${decor()}${stamp(stampText(), 'onbanner')}</div>
       <div class="pbody"><label class="lframe avatar-btn" title="Trocar foto">${avatar('lg')}<span class="cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><input type="file" id="quickph" accept="image/*" aria-label="Trocar foto de perfil"></label>
         <div class="pinfo"><h1>${esc(p.name || 'Seu nome')}</h1>${p.handle ? `<div class="handle">@${esc(p.handle)}</div>` : ''}${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
           <div class="pstats"><div><b>${db.posts.length + read.filter(b => b.review || b.rating).length}</b><span>publicações</span></div><div><b>${read.length}</b><span>livros</span></div><div><b>${read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString('pt-BR')}</b><span>páginas</span></div></div>
@@ -669,27 +674,46 @@ function profileDialog() {
     if (pinv) p.pin = await hashPin(pinv); else if (dropPin) p.pin = '';
     Object.assign(p, { name: $('#pn', d).value.trim(), handle: $('#ph', d).value.trim().toLowerCase().replace(/[^a-z0-9._]/g, ''), bio: $('#pb', d).value.trim(), mascot: st.mascot, bg: st.bg, photo: st.photo, stickers, goal: Number($('#pg', d).value) || 0, welcomed: true });
     p.favorites = [...new Set([...d.querySelectorAll('.fv')].map(s => s.value).filter(Boolean))];
-    save(); closeDlg(); render(); toast('Perfil salvo ♡');
+    save(); closeDlg(); render(); toast('Perfil salvo ✿');
   };
 }
 
 function welcomeDialog() {
   const p = db.profile, st = { mascot: p.mascot || '', bg: p.bg || 0, photo: p.photo || '' };
-  const d = openDlg(`<form id="wf"><h2>Oi! Bem-vinda ♡</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Vamos deixar tudo com a sua cara.</p>
+  const d = openDlg(`<form id="wf"><h2>Oi! Bem-vinda ✿</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Vamos deixar tudo com a sua cara.</p>
     <label for="wn">Como você quer ser chamada?</label><input id="wn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
     ${pickerHTML(st, true)}
     <div class="actions"><button class="btn" type="submit">Começar ✿</button></div></form>`);
   wirePicker(d, st, $('#wn', d));
   const done = () => { Object.assign(p, { welcomed: true }); save(); };
   d.addEventListener('close', function f() { d.removeEventListener('close', f); if (!p.welcomed) done(); render(); });
-  $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, photo: st.photo, welcomed: true }); save(); closeDlg(); toast('Que lindo! ♡'); };
+  $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, photo: st.photo, welcomed: true }); save(); closeDlg(); toast('Que lindo! ✿'); };
   $('#wn', d).focus();
+}
+
+function newsDialog() {
+  const n = db.news;
+  const d = openDlg(`<form id="nf"><h2>Editar jornal</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Vale para a faixa do Início e para o recorte do seu perfil.</p>
+    <label for="nt">Nome do jornal (faixa do Início)</label><input id="nt" type="text" maxlength="40" value="${esc(n.title || '')}" placeholder="${esc(newsTitle())}" autocomplete="off">
+    <label for="nx">Texto da faixa</label><textarea id="nx" maxlength="500" style="min-height:96px" placeholder="${esc(newsText().slice(0, 90))}…">${esc(n.text || '')}</textarea>
+    <label for="ch">Título do recorte (perfil)</label><input id="ch" type="text" maxlength="40" value="${esc(n.clipHead || '')}" placeholder="${esc(clipHead())}" autocomplete="off">
+    <label for="cx2">Texto do recorte</label><textarea id="cx2" maxlength="400" style="min-height:84px" placeholder="${esc(clipText().slice(0, 90))}…">${esc(n.clipText || '')}</textarea>
+    <label for="st">Frase da etiqueta (perfil)</label><input id="st" type="text" maxlength="70" value="${esc(n.stamp || '')}" placeholder="${esc(stampText())}" autocomplete="off">
+    <div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="cx">Cancelar</button><button class="link" type="button" id="nreset" style="margin-left:auto">restaurar originais</button></div></form>`);
+  $('#cx', d).onclick = closeDlg;
+  $('#nreset', d).onclick = () => { ['nt', 'nx', 'ch', 'cx2', 'st'].forEach(i => $('#' + i, d).value = ''); toast('Voltou ao texto original'); };
+  $('#nf', d).onsubmit = e => {
+    e.preventDefault();
+    db.news = { title: $('#nt', d).value.trim(), text: $('#nx', d).value.trim(), clipHead: $('#ch', d).value.trim(), clipText: $('#cx2', d).value.trim(), stamp: $('#st', d).value.trim() };
+    save(); closeDlg(); render(); toast('Jornal atualizado ✿');
+  };
+  $('#nt', d).focus();
 }
 
 /* ---------- publicar, criar, bloquear ---------- */
 function composeDialog(kind = 'note') {
   let k = kind;
-  const d = openDlg(`<form id="cf"><h2>Nova publicação</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Só você vê ♡</p>
+  const d = openDlg(`<form id="cf"><h2>Nova publicação</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Só você vê ✿</p>
     <div class="tabs" role="tablist" style="margin:16px 0 4px"><button type="button" role="tab" data-k="note" aria-selected="true">Nota</button><button type="button" role="tab" data-k="quote" aria-selected="false">Citação</button></div>
     <label for="ct" id="ctl">O que você está pensando ou lendo?</label><textarea id="ct" maxlength="600" style="min-height:110px" required></textarea>
     <label for="cbk">Sobre qual livro? (opcional)</label><select id="cbk"><option value="">Nenhum</option>${db.books.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</select>
@@ -700,7 +724,7 @@ function composeDialog(kind = 'note') {
   $('#cf', d).onsubmit = e => {
     e.preventDefault(); const text = $('#ct', d).value.trim(); if (!text) return;
     db.posts.push({ id: uid(), kind: k, bookId: $('#cbk', d).value, text, ts: Date.now() });
-    save(); closeDlg(); if (location.hash !== '#/') location.hash = '#/'; else render(); toast('Publicado ♡');
+    save(); closeDlg(); if (location.hash !== '#/') location.hash = '#/'; else render(); toast('Publicado ✿');
   };
 }
 function createDialog() {
@@ -716,7 +740,7 @@ async function hashPin(pin) {
 function showLock() {
   locked = true; $('#app').innerHTML = ''; document.getElementById('lock')?.remove();
   const el = document.createElement('div'); el.id = 'lock'; el.className = 'lock dots';
-  el.innerHTML = `<div class="lockin"><div class="lframe">${avatar('lg')}</div><h2>${esc(db.profile.name || 'Livros da Giovanna')}</h2><p>Este espaço é privado ♡</p>
+  el.innerHTML = `<div class="lockin"><div class="lframe">${avatar('lg')}</div><h2>${esc(db.profile.name || 'Livros da Giovanna')}</h2><p>Este espaço é privado ✿</p>
     <form id="lf"><input id="lpin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Digite seu PIN" aria-label="PIN"><button class="btn" type="submit">Entrar</button></form><p class="lerr" id="lerr" role="alert"></p></div>`;
   document.body.appendChild(el);
   $('#lpin', el).focus();
@@ -766,16 +790,7 @@ function importDialog() {
 
 /* ---------- events ---------- */
 function bindSocial(app) {
-  const by = (sel, k) => app.querySelector(`${sel}[data-cbox="${CSS.escape(k)}"]`);
-  app.querySelectorAll('[data-like]').forEach(b => b.onclick = () => { const s = soc(b.dataset.like); s.liked = !s.liked; save(); b.setAttribute('aria-pressed', s.liked); b.querySelector('span').textContent = s.liked ? 'Curtido' : ''; });
-  app.querySelectorAll('[data-save]').forEach(b => b.onclick = () => { const s = soc(b.dataset.save); s.saved = !s.saved; save(); b.setAttribute('aria-pressed', s.saved); toast(s.saved ? 'Salvo ♡' : 'Removido dos salvos'); });
-  app.querySelectorAll('[data-cmt]').forEach(b => b.onclick = () => { const box = app.querySelector(`[data-cbox="${CSS.escape(b.dataset.cmt)}"]`); box.hidden = !box.hidden; if (!box.hidden) $('input', box).focus(); });
-  app.querySelectorAll('[data-cform]').forEach(f => f.onsubmit = e => {
-    e.preventDefault(); const inp = $('input', f), text = inp.value.trim(); if (!text) return;
-    const k = f.dataset.cform, s = soc(k), c = { id: uid(), text, ts: Date.now() }; s.comments.push(c); save();
-    f.insertAdjacentHTML('beforebegin', cmtHTML(c)); inp.value = '';
-    const n = app.querySelector(`[data-cmt="${CSS.escape(k)}"] .cn`); if (n) n.textContent = s.comments.length;
-  });
+  app.querySelectorAll('[data-save]').forEach(b => b.onclick = () => { const s = soc(b.dataset.save); s.saved = !s.saved; save(); b.setAttribute('aria-pressed', s.saved); toast(s.saved ? 'Salvo ✿' : 'Removido dos salvos'); });
   app.querySelectorAll('[data-sharebtn]').forEach(b => b.onclick = async () => {
     const t = b.closest('.post').dataset.share;
     try { await navigator.clipboard.writeText(t); toast('Texto copiado'); } catch { toast('Não consegui copiar'); }
@@ -784,6 +799,7 @@ function bindSocial(app) {
     if (!await askConfirm('Apagar esta publicação?', 'Apagar')) return;
     db.posts = db.posts.filter(p => p.id !== b.dataset.delpost); save(); render();
   });
+  app.querySelectorAll('[data-editnews]').forEach(x => { x.onclick = newsDialog; x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); newsDialog(); } }; });
   const n1 = $('#composer', app), n2 = $('#newpost', app), n3 = $('#newbtn', app), lk = $('#lockbtn', app);
   if (n1) n1.onclick = () => composeDialog(); if (n2) n2.onclick = () => composeDialog(); if (n3) n3.onclick = createDialog;
   if (lk) lk.onclick = () => { if (db.profile.pin) showLock(); else { toast('Defina um PIN em Editar perfil para bloquear'); } };
@@ -804,7 +820,7 @@ function bind() {
   on('#finish', () => finishDialog(id));
   on('#editp', profileDialog);
   const qp = $('#quickph', app);
-  if (qp) qp.onchange = async e => { const f = e.target.files[0]; if (!f) return; try { db.profile.photo = await fileToCover(f, 320, 320); save(); render(); toast('Foto atualizada ♡'); } catch { toast('Não consegui abrir essa imagem'); } };
+  if (qp) qp.onchange = async e => { const f = e.target.files[0]; if (!f) return; try { db.profile.photo = await fileToCover(f, 320, 320); save(); render(); toast('Foto atualizada ✿'); } catch { toast('Não consegui abrir essa imagem'); } };
   on('#start', () => { const b = getBook(id); b.status = 'reading'; b.startedAt = b.startedAt || today(); save(); render(); });
   on('#rmsamples', async () => {
     if (!await askConfirm('Remover os livros de exemplo e as publicações de exemplo? O que você criou continua.', 'Remover')) return;
@@ -821,7 +837,7 @@ function bind() {
     const b = getBook(id), page = Number($('#lp', app).value) || 0, note = $('#ln', app).value.trim();
     if (!page && !note) { $('#lp', app).focus(); return; }
     b.log = b.log || []; b.log.push({ id: uid(), date: today(), page, note });
-    save(); render(); toast('Registrado ♡');
+    save(); render(); toast('Registrado ✿');
   };
   app.querySelectorAll('[data-del]').forEach(x => x.onclick = () => {
     const b = getBook(id); b.log = b.log.filter(e => e.id !== x.dataset.del); save(); render();
@@ -842,6 +858,7 @@ function render() {
 let lastHash = null;
 addEventListener('hashchange', () => { render(); if (location.hash !== lastHash) scrollTo(0, 0); lastHash = location.hash; });
 seed();
+cleanHearts();
 seedPosts();
 applySampleArt();
 if (db.profile.pin) showLock(); else render();
