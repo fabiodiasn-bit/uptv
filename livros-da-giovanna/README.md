@@ -1,4 +1,4 @@
-# Diário de Leituras
+# Livros da Giovanna
 
 App minimalista para registrar suas leituras: histórico durante a leitura, resenha e nota (0–5 estrelas, com meia estrela) ao concluir, e um perfil com foto, nome e top 5 favoritos.
 
@@ -19,4 +19,4 @@ Precisa apenas do Node 16+ (sem `npm install`). Também funciona abrindo `index.
 Ficam no `localStorage` do navegador. Use **Perfil → Exportar backup** para guardar ou levar seus dados a outro aparelho (**Importar backup**).
 
 ## Estrutura
-`index.html` · `style.css` · `app.js` · `server.js`
+`Livros-da-Giovanna.html` (versão em arquivo único) · `index.html` · `style.css` · `app.js` · `server.js`

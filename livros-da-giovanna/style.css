@@ -181,7 +181,7 @@ body{font-size:16px;line-height:1.6}
 h1,h2,.brand,.t,.stat b,.year .y,.cover b,.yr b,.rank{font-family:var(--sans);font-style:normal}
 h1{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.12}
 h2{font-weight:700}
-.brand{font-size:21px;font-weight:700;letter-spacing:-.02em}
+.brand{font-size:19px;font-weight:700;letter-spacing:-.02em}
 .sh{font-size:20px;font-weight:700;letter-spacing:-.01em}
 .year .y{font-size:54px;font-weight:700;letter-spacing:-.04em}
 .stat b{font-size:28px;font-weight:700;letter-spacing:-.02em}
@@ -267,3 +267,8 @@ h2{font-weight:700}
 .bookhead .coverbtn .cover.lg{width:170px}
 @media (max-width:560px){.bookhead .coverbtn .cover.lg{width:140px}h1{font-size:28px}.year .y{font-size:44px}}
 @media (max-width:640px){.cover.xl{width:min(190px,50vw)}.cover.xl b{font-size:20px}.zoom.full .cover.xl{width:auto}}
+.brand,.btn{white-space:nowrap}
+@media (max-width:560px){.brand{font-size:16px;gap:8px}.logo{width:26px;height:26px;font-size:13px}.nav{gap:8px}.nav .btn.sm{padding:8px 12px}.top{gap:8px}}
+
+#ask{width:min(420px,calc(100vw - 24px))}
+#ask h2{font-size:20px;line-height:1.3}

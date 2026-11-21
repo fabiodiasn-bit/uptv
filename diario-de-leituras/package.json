@@ -1,8 +1,0 @@
-{
-  "name": "diario-de-leituras",
-  "version": "1.0.0",
-  "description": "Diário de leituras minimalista: histórico, resenhas, notas e perfil.",
-  "private": true,
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=16" }
-}

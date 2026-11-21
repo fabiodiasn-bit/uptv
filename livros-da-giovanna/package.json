@@ -1,0 +1,8 @@
+{
+  "name": "livros-da-giovanna",
+  "version": "1.0.0",
+  "description": "Livros da Giovanna: diário de leituras com histórico, resenhas, notas e perfil.",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=16" }
+}

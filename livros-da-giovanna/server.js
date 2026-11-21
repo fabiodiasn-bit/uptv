@@ -10,4 +10,4 @@ http.createServer((req, res) => {
     if (err) { res.writeHead(404); return res.end('Não encontrado'); }
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' }); res.end(data);
   });
-}).listen(port, () => console.log(`Diário de Leituras rodando em http://localhost:${port}`));
+}).listen(port, () => console.log(`Livros da Giovanna rodando em http://localhost:${port}`));
