@@ -91,6 +91,42 @@ function seed() {
   db.seeded = true; save();
 }
 
+/* ---------- capas ilustradas (arte própria, livros de domínio público) ---------- */
+const svgUri = s => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+const SVG_HEAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 540" width="360" height="540">';
+const ART = {
+  'Dom Casmurro': () => `${SVG_HEAD}<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17344d"/><stop offset="1" stop-color="#0b1a29"/></linearGradient></defs>
+<rect width="360" height="540" fill="url(#g)"/><rect x="18" y="18" width="324" height="504" fill="none" stroke="#e9c46a" stroke-width="2"/><rect x="26" y="26" width="308" height="488" fill="none" stroke="#e9c46a" stroke-width=".8" opacity=".6"/>
+<text x="180" y="96" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="34" fill="#f4e9cd" letter-spacing="8">DOM</text>
+<text x="180" y="142" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="40" fill="#f4e9cd" letter-spacing="3">CASMURRO</text>
+<path d="M64 300 Q180 205 296 300 Q180 395 64 300Z" fill="#f4e9cd"/><circle cx="180" cy="300" r="50" fill="#2a9d8f"/><circle cx="180" cy="300" r="23" fill="#0b1a29"/><circle cx="193" cy="287" r="8" fill="#f4e9cd"/>
+<path d="M44 428 q34 -22 68 0 t68 0 t68 0 t68 0" stroke="#2a9d8f" fill="none" stroke-width="3"/><path d="M44 448 q34 -22 68 0 t68 0 t68 0 t68 0" stroke="#7fd1c7" fill="none" stroke-width="2" opacity=".7"/><path d="M44 466 q34 -22 68 0 t68 0 t68 0 t68 0" stroke="#e9c46a" fill="none" stroke-width="1.4" opacity=".6"/>
+<text x="180" y="506" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="17" fill="#e9c46a" letter-spacing="4">MACHADO DE ASSIS</text></svg>`,
+  'A Metamorfose': () => `${SVG_HEAD}<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e76f51"/><stop offset="1" stop-color="#f4a261"/></linearGradient></defs>
+<rect width="360" height="540" fill="url(#g)"/><rect x="22" y="22" width="316" height="496" fill="none" stroke="#2b1d14" stroke-width="3"/>
+<text x="180" y="86" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="24" fill="#2b1d14" letter-spacing="6">A</text>
+<text x="180" y="128" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="35" fill="#2b1d14" letter-spacing="1">METAMORFOSE</text>
+<g stroke="#2b1d14" stroke-width="5" stroke-linecap="round" fill="none"><path d="M128 262 L84 232 L62 248"/><path d="M124 306 L72 306 L54 328"/><path d="M128 350 L84 384 L66 372"/><path d="M232 262 L276 232 L298 248"/><path d="M236 306 L288 306 L306 328"/><path d="M232 350 L276 384 L294 372"/><path d="M168 196 L150 160"/><path d="M192 196 L210 160"/></g>
+<ellipse cx="180" cy="320" rx="62" ry="100" fill="#2b1d14"/><circle cx="180" cy="208" r="28" fill="#2b1d14"/><circle cx="170" cy="204" r="5" fill="#f4a261"/><circle cx="190" cy="204" r="5" fill="#f4a261"/>
+<g stroke="#e76f51" stroke-width="3" fill="none"><path d="M128 268 Q180 288 232 268"/><path d="M121 304 Q180 328 239 304"/><path d="M122 340 Q180 366 238 340"/><path d="M134 374 Q180 396 226 374"/><path d="M180 232 V420"/></g>
+<text x="180" y="496" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="20" fill="#2b1d14" letter-spacing="5">FRANZ KAFKA</text></svg>`,
+  'O Pequeno Príncipe': () => `${SVG_HEAD}<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1946"/><stop offset="1" stop-color="#3b4aa0"/></linearGradient></defs>
+<rect width="360" height="540" fill="url(#g)"/>
+<g fill="#ffe9a8"><circle cx="60" cy="190" r="2.2"/><circle cx="300" cy="170" r="2.6"/><circle cx="110" cy="250" r="1.8"/><circle cx="250" cy="240" r="2"/><circle cx="320" cy="260" r="1.6"/><circle cx="40" cy="270" r="1.6"/><circle cx="210" cy="190" r="1.8"/></g>
+<g fill="#ffe9a8"><path d="M300 210 l4 12 l12 4 l-12 4 l-4 12 l-4 -12 l-12 -4 l12 -4z"/><path d="M70 220 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3z"/></g>
+<text x="180" y="82" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="26" fill="#ffe08a" letter-spacing="7">O PEQUENO</text>
+<text x="180" y="130" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="42" fill="#ffe08a" letter-spacing="3">PRÍNCIPE</text>
+<circle cx="180" cy="690" r="290" fill="#f2c14e"/><circle cx="180" cy="690" r="290" fill="none" stroke="#f7dc8a" stroke-width="6"/>
+<g><polygon points="164,402 196,402 180,350" fill="#2a9d8f"/><circle cx="180" cy="334" r="16" fill="#f6d7b0"/><path d="M164 330 q16 -26 32 0 q-6 -6 -16 -6 q-10 0 -16 6z" fill="#ffd34d"/><path d="M164 346 q16 10 32 0" stroke="#ffd34d" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M196 352 q28 -2 34 12" stroke="#ffd34d" stroke-width="6" fill="none" stroke-linecap="round"/></g>
+<g><path d="M110 402 q-2 -26 6 -40" stroke="#2a9d8f" stroke-width="3" fill="none"/><circle cx="118" cy="356" r="9" fill="#e63946"/><circle cx="111" cy="360" r="6.5" fill="#d62839"/></g>
+<text x="180" y="488" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="14" fill="#2a2349" letter-spacing="2.4">ANTOINE DE SAINT-EXUPÉRY</text></svg>`
+};
+function applySampleArt() {
+  let ch = false;
+  db.books.forEach(b => { if (b.sample && !b.cover && ART[b.title]) { b.cover = svgUri(ART[b.title]()); b.coverTried = true; ch = true; } });
+  if (ch) save();
+}
+
 /* ---------- covers ---------- */
 let coverTimer;
 async function findCover(b) {
@@ -556,6 +592,7 @@ function render() {
 let lastHash = null;
 addEventListener('hashchange', () => { render(); if (location.hash !== lastHash) scrollTo(0, 0); lastHash = location.hash; });
 seed();
+applySampleArt();
 render();
 findAllCovers();
 if (!db.profile.welcomed) welcomeDialog();
