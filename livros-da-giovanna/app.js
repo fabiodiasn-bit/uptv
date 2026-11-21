@@ -148,8 +148,8 @@ function companion(read, reading, goal) {
   return `<div class="companion"><div class="bubble"><b>Oi${n ? ', ' + esc(n) : ''}!</b> ${msg}</div><span class="avatar mascot" style="background:${BG[p.bg || 0] || BG[0]}">${mascotSvg(p.mascot)}</span></div>`;
 }
 function pickerHTML(st, withPhoto) {
-  return `<div class="pk-prev"><span id="pkprev"></span>${withPhoto ? `<div><button class="btn ghost sm" type="button" id="pickph">Usar uma foto</button> <button class="link" type="button" id="rmph">remover foto</button><input type="file" id="phf" accept="image/*" hidden></div>` : ''}</div>
-    <label>Escolha seu bichinho</label><div class="pk-grid" role="radiogroup" aria-label="Bichinho">${Object.entries(MASCOTS).map(([k, m]) => `<button type="button" class="pk" role="radio" aria-checked="false" aria-label="${m.label}" title="${m.label}" data-m="${k}">${mascotSvg(k)}</button>`).join('')}</div>
+  return `<div class="pk-prev"><span id="pkprev"></span>${withPhoto ? `<div><button class="btn sm" type="button" id="pickph">Adicionar minha foto</button> <button class="link" type="button" id="rmph">remover foto</button><input type="file" id="phf" accept="image/*" hidden></div>` : ''}</div>
+    <label>Ou escolha um bichinho (sem foto)</label><div class="pk-grid" role="radiogroup" aria-label="Bichinho">${Object.entries(MASCOTS).map(([k, m]) => `<button type="button" class="pk" role="radio" aria-checked="false" aria-label="${m.label}" title="${m.label}" data-m="${k}">${mascotSvg(k)}</button>`).join('')}</div>
     <label>Cor de fundo</label><div class="pk-bg" role="radiogroup" aria-label="Cor de fundo">${BG.map((c, i) => `<button type="button" class="sw" role="radio" aria-checked="false" aria-label="Cor ${i + 1}" data-bg="${i}" style="background:${c}"></button>`).join('')}</div>`;
 }
 function wirePicker(d, st, nameEl) {
@@ -274,7 +274,7 @@ function profileView() {
   const a = avg(read);
   return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
     <section class="card" style="padding:0;overflow:hidden"><div class="banner">${decor()}</div><div class="pcard">
-      <div class="hero">${avatar('lg')}<div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
+      <div class="hero"><label class="avatar-btn" title="Trocar foto">${avatar('lg')}<span class="cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><input type="file" id="quickph" accept="image/*" aria-label="Trocar foto de perfil"></label><div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
       <button class="btn ghost sm" id="editp">Editar perfil</button></div></div></section>
 
     <div class="stats light" style="margin-top:20px">
@@ -461,15 +461,15 @@ function profileDialog() {
 }
 
 function welcomeDialog() {
-  const p = db.profile, st = { mascot: p.mascot || 'bunny', bg: p.bg || 0, photo: '' };
+  const p = db.profile, st = { mascot: p.mascot || 'bunny', bg: p.bg || 0, photo: p.photo || '' };
   const d = openDlg(`<form id="wf"><h2>Oi! Bem-vinda ♡</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Vamos deixar tudo com a sua cara.</p>
     <label for="wn">Como você quer ser chamada?</label><input id="wn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
-    ${pickerHTML(st, false)}
+    ${pickerHTML(st, true)}
     <div class="actions"><button class="btn" type="submit">Começar ✿</button></div></form>`);
   wirePicker(d, st, $('#wn', d));
   const done = () => { Object.assign(p, { welcomed: true }); save(); };
   d.addEventListener('close', function f() { d.removeEventListener('close', f); if (!p.welcomed) done(); render(); });
-  $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, welcomed: true }); save(); closeDlg(); toast('Que lindo! ♡'); };
+  $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, photo: st.photo, welcomed: true }); save(); closeDlg(); toast('Que lindo! ♡'); };
   $('#wn', d).focus();
 }
 
@@ -523,6 +523,8 @@ function bind() {
   on('#edit', () => bookDialog(id));
   on('#finish', () => finishDialog(id));
   on('#editp', profileDialog);
+  const qp = $('#quickph', app);
+  if (qp) qp.onchange = async e => { const f = e.target.files[0]; if (!f) return; try { db.profile.photo = await fileToCover(f, 320, 320); save(); render(); toast('Foto atualizada ♡'); } catch { toast('Não consegui abrir essa imagem'); } };
   on('#start', () => { const b = getBook(id); b.status = 'reading'; b.startedAt = b.startedAt || today(); save(); render(); });
   on('#exp', exportDialog);
   on('#imp', importDialog);
