@@ -158,7 +158,7 @@ function fileToCover(file, W = 360, H = 540) {
 }
 
 /* ---------- bichinhos e símbolos ---------- */
-const BG = ['#ede4ff', '#dccbff', '#ffe3f0', '#dff1ff', '#fff1cf', '#dff7e8'];
+const BG = ['#efe4cf', '#e1d3f5', '#f3dccd', '#d9c3a0', '#eadff9', '#e5d9c0'];
 const GLYPHS = ['♡', '✿', '☁', '☾', '✦', '★', '❀', '♪', '✧', '❥', '☼', '✩'];
 const EYES = '<circle cx="37" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="63" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="38.7" cy="54.3" r="1.5" fill="#fff"/><circle cx="64.7" cy="54.3" r="1.5" fill="#fff"/>';
 const CHEEK = '<ellipse cx="27" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/><ellipse cx="73" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/>';
@@ -208,9 +208,39 @@ function wirePicker(d, st, nameEl) {
   show();
 }
 
+/* ---------- colagem: renda, fita, recortes, risquinhos ---------- */
+(function () {
+  const N = 18, R = 45, r = 5.2, holes = [];
+  let bumps = '';
+  for (let i = 0; i < N; i++) { const a = 2 * Math.PI * i / N, cx = 50 + R * Math.cos(a), cy = 50 + R * Math.sin(a); bumps += `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r}"/>`; const b = a + Math.PI / N; holes.push(`<circle cx="${(50 + 41 * Math.cos(b)).toFixed(2)}" cy="${(50 + 41 * Math.sin(b)).toFixed(2)}" r="1.9" fill="#000"/>`); const h2 = `<circle cx="${(50 + 41 * Math.cos(a)).toFixed(2)}" cy="${(50 + 41 * Math.sin(a)).toFixed(2)}" r="1.1" fill="#000"/>`; holes.push(h2); }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><mask id="m"><rect width="100" height="100" fill="#fff"/>${holes.join('')}<circle cx="50" cy="50" r="38.2" fill="#000"/></mask></defs><g mask="url(#m)" fill="#fbf5e8" stroke="#c9ad86" stroke-width=".6"><circle cx="50" cy="50" r="${R}"/>${bumps}</g></svg>`;
+  document.documentElement.style.setProperty('--lace', `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`);
+})();
+const SCRIB = {
+  zig: '<svg class="scrib CLS" style="STY" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 18 L14 4 L26 20 L38 4 L50 20 L62 4 L78 18"/></svg>',
+  loop: '<svg class="scrib CLS" style="STY" viewBox="0 0 80 28" aria-hidden="true"><path d="M2 22 C14 2 30 2 26 15 C22 25 10 14 30 8 C48 2 58 24 78 8"/></svg>',
+  ring: '<svg class="scrib CLS" style="STY" viewBox="0 0 80 48" aria-hidden="true"><path d="M42 4 C16 2 2 20 18 33 C36 46 72 37 76 18 C78 6 56 0 30 7"/></svg>',
+  star: '<svg class="scrib CLS" style="STY" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 V22 M2 12 H22 M5 5 L19 19 M19 5 L5 19"/></svg>',
+  wave: '<svg class="scrib CLS" style="STY" viewBox="0 0 104 16" aria-hidden="true"><path d="M2 8 Q12 0 22 8 T42 8 T62 8 T82 8 T102 8"/></svg>'
+};
+const scrib = (k, cls, sty) => SCRIB[k].replace('CLS', cls).replace('STY', sty);
+const tape = (cls, sty) => `<span class="tape ${cls}" style="${sty}" aria-hidden="true"></span>`;
+const clip = (cls, sty, head, text) => `<div class="clip ${cls}" style="${sty}" aria-hidden="true"><div class="clip-in"><b>${head}</b>${text}</div></div>`;
+const NEWS = ['Nesta edição, as melhores páginas da semana. Leitores contam o que ficou marcado entre um capítulo e outro, e as estantes ganham novos moradores. <i>Café frio, luz baixa</i> e mais um capítulo antes de dormir. A cidade inteira parece falar de livros nas últimas noites.', 'Sebos relatam procura recorde por clássicos. Clubes de leitura se multiplicam nos bairros e há quem leia no ônibus, na fila, no intervalo. <i>Folhear devagar</i> voltou à moda, dizem as livreiras, entre uma xícara e outra.'];
+function collage(kind) {
+  if (kind === 'hero') return clip('', 'right:150px;top:-26px;transform:rotate(5deg)', 'A HORA DA LEITURA', NEWS[0]) +
+    tape('b', 'left:34px;top:-6px;transform:rotate(-8deg)') +
+    scrib('wave', 'c', 'left:290px;top:104px;width:110px') + scrib('star', 'l', 'left:54%;top:118px;width:20px') +
+    scrib('zig', 'p', 'right:30px;bottom:-14px;width:74px;transform:rotate(-8deg)') + scrib('loop', 'b', 'right:44%;bottom:8px;width:70px;opacity:.8') +
+    tape('l', 'right:-18px;bottom:46px;transform:rotate(58deg);width:70px');
+  return clip('dark', 'right:30px;top:12px;transform:rotate(-4deg)', 'DIÁRIO DE LEITURAS', NEWS[1]) +
+    tape('b', 'left:22px;top:-6px;transform:rotate(-7deg)') + tape('c', 'right:12px;top:6px;transform:rotate(40deg);width:64px') +
+    scrib('ring', 'c', 'left:34%;top:30px;width:80px') + scrib('zig', 'p', 'left:48%;bottom:18px;width:70px') + scrib('star', 'k', 'left:40%;bottom:30px;width:22px');
+}
+
 /* ---------- views ---------- */
 const hashN = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-const PAL = [['#a07cf5','#6b3fd0'],['#8b5cf0','#4b2a9e'],['#7c4dde','#2e175f'],['#b08af7','#7c4dde'],['#6b3fd0','#241350'],['#9d78ee','#43228a']];
+const PAL = [['#a8774f','#6a4429'],['#8b5cf0','#4b2a9e'],['#b08968','#6f4a30'],['#7c4dde','#2e175f'],['#9c7a5b','#5a3b27'],['#a07cf5','#6b3fd0']];
 const cover = (b, cls = '') => {
   const [x, y] = PAL[hashN(b.title) % PAL.length];
   return `<span class="cover ${cls} ${b.cover ? 'has-img' : ''}" style="--a:${x};--c:${y}"><b>${esc(b.title)}</b><i>${esc(b.author)}</i>${b.cover ? `<img src="${esc(b.cover)}" alt="Capa de ${esc(b.title)}" loading="lazy" draggable="false" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('has-img');this.remove()">` : ''}</span>`;
@@ -245,7 +275,7 @@ function home() {
   const a = avg(read), goal = Number(db.profile.goal) || 0;
   return `${header()}<main class="view">
     <section class="hero-card">
-      ${decor()}${companion(read, reading, goal)}
+      ${collage('hero')}${decor()}${companion(read, reading, goal)}
       <div class="year">
         <button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button>
         <span class="y">${year}</span>
@@ -260,12 +290,12 @@ function home() {
       ${goal ? `<div class="goal"><div class="gt"><span>♡ Meta de ${year}</span><b>${read.length} de ${goal} ${goal === 1 ? 'livro' : 'livros'}${read.length >= goal ? ' ✦' : ''}</b></div><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
     </section>
 
-    ${reading.length ? `<section class="sec"><h2 class="sh">Lendo agora</h2>${carousel(reading, b => slide(b, metaReading(b)), 'Lendo agora')}</section>` : ''}
+    ${reading.length ? `<section class="sec"><h2 class="sh"><span>Lendo agora</span></h2>${carousel(reading, b => slide(b, metaReading(b)), 'Lendo agora')}</section>` : ''}
 
-    <section class="sec"><h2 class="sh">Lidos em ${year}</h2>
+    <section class="sec"><h2 class="sh"><span>Lidos em ${year}</span></h2>
       ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda ♡</div>`}</section>
 
-    ${want.length ? `<section class="sec"><h2 class="sh">Para ler</h2>${carousel(want, b => slide(b), 'Para ler')}</section>` : ''}
+    ${want.length ? `<section class="sec"><h2 class="sh"><span>Para ler</span></h2>${carousel(want, b => slide(b), 'Para ler')}</section>` : ''}
   </main>`;
 }
 
@@ -292,7 +322,7 @@ function bookView(id) {
       <div class="actions"><button class="btn ghost sm" id="finish">${b.review || b.rating ? 'Editar resenha' : 'Escrever resenha'}</button></div></section>` : ''}
 
     ${b.status === 'reading' ? `<section class="card" style="margin-top:20px">
-      <h2 class="sh" style="font-size:20px">Registrar leitura</h2>
+      <h2 class="sh" style="font-size:20px"><span>Registrar leitura</span></h2>
       ${b.pages ? `<div style="display:flex;justify-content:space-between;font-size:13px" class="muted"><span>${lastPage(b)} de ${b.pages} páginas</span><span>${pct(b)}%</span></div><div class="bar"><i style="width:${pct(b)}%"></i></div>` : ''}
       <form id="logf" class="quick" style="margin-top:18px">
         <div><label for="lp">Página</label><input id="lp" type="number" min="0" inputmode="numeric" placeholder="${lastPage(b) || ''}"></div>
@@ -300,7 +330,7 @@ function bookView(id) {
         <button class="btn" type="submit">Registrar</button>
       </form></section>` : ''}
 
-    ${log.length ? `<section class="card" style="margin-top:20px"><h2 class="sh" style="font-size:20px">Histórico de leitura</h2><ul class="log">
+    ${log.length ? `<section class="card" style="margin-top:20px"><h2 class="sh" style="font-size:20px"><span>Histórico de leitura</span></h2><ul class="log">
       ${log.map(e => `<li><div class="d"><span>${fmtD(e.date, true)}</span>${e.page ? `<span>· pág. ${e.page}</span>` : ''}<button class="x" data-del="${e.id}" aria-label="Remover registro">✕</button></div>${e.note ? `<div class="n">${esc(e.note)}</div>` : ''}</li>`).join('')}</ul></section>` : ''}
   </main>`;
 }
@@ -312,7 +342,7 @@ function profileView() {
   const mx = Math.max(1, ...Object.values(byYear));
   const a = avg(read);
   return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
-    <section class="card" style="padding:0;overflow:hidden"><div class="banner">${decor()}</div><div class="pcard">
+    <section class="card profilecard" style="padding:0"><div class="banner">${collage('banner')}${decor()}</div><div class="pcard">
       <div class="hero"><label class="avatar-btn" title="Trocar foto">${avatar('lg')}<span class="cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><input type="file" id="quickph" accept="image/*" aria-label="Trocar foto de perfil"></label><div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
       <button class="btn ghost sm" id="editp">Editar perfil</button></div></div></section>
 
@@ -322,13 +352,13 @@ function profileView() {
       <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
     </div>
 
-    <section class="sec"><h2 class="sh">Top favoritos</h2>
+    <section class="sec"><h2 class="sh"><span>Top favoritos</span></h2>
       ${favs.length ? carousel(favs, (b, i) => slide(b, '', i + 1), 'Top favoritos') : `<div class="empty">Escolha até cinco livros em “Editar perfil”.</div>`}</section>
 
-    ${Object.keys(byYear).length ? `<section class="sec"><h2 class="sh">Ano a ano</h2><div class="card years">
+    ${Object.keys(byYear).length ? `<section class="sec"><h2 class="sh"><span>Ano a ano</span></h2><div class="card years">
       ${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="yr" data-goyear="${y}"><b>${y}</b><div class="bar"><i style="width:${byYear[y] / mx * 100}%"></i></div><span>${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div></section>` : ''}
 
-    <section class="sec"><h2 class="sh">Seus dados</h2><div class="card">
+    <section class="sec"><h2 class="sh"><span>Seus dados</span></h2><div class="card">
       <p class="muted" style="margin:0;font-size:13px;max-width:52ch">Tudo fica salvo neste aparelho, neste navegador. Exporte um backup de tempos em tempos, ou para levar seu perfil para outro aparelho.</p>
       <div class="actions" style="margin-top:16px"><button class="btn ghost sm" id="exp">Exportar backup</button><button class="btn ghost sm" id="imp">Importar backup</button>${db.books.some(b => b.sample) ? '<button class="btn danger sm" id="rmsamples">Remover livros de exemplo</button>' : ''}</div></div></section>
   </main>`;
