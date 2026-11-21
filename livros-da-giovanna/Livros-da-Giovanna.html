@@ -695,6 +695,10 @@ html,body{overflow-x:hidden}
 .mh-cols{white-space:pre-line}
 .pact{justify-content:space-between}
 .mh-cols{height:auto;max-height:76px}
+
+.lib .mh-wrap{margin-bottom:16px}
+.tabin{justify-content:space-around}
+.tabin a{max-width:140px}
 </style>
 </head>
 <body>
@@ -1088,15 +1092,15 @@ function postCard(it) {
 
 function header() {
   const pin = !!db.profile.pin;
-  return `<header class="top"><a class="brand" href="#/"><span class="logo">✦</span>Livros da Giovanna</a>
+  return `<header class="top"><a class="brand" href="#/estante"><span class="logo">✦</span>Livros da Giovanna</a>
     <div class="nav"><span class="privacy">${IC.lock} Privado</span><button class="iconbtn" id="lockbtn" aria-label="${pin ? 'Bloquear o app' : 'Definir um PIN'}" title="${pin ? 'Bloquear' : 'Definir PIN'}">${IC.lock}</button></div></header>`;
 }
 function navHTML(tab) {
   const a = (h, id, ic, l) => `<a href="${h}" class="${tab === id ? 'on' : ''}">${ic}<span>${l}</span></a>`;
   return `<nav class="tabbar" aria-label="Navegação"><div class="tabin">
-    ${a('#/', 'home', IC.home, 'Início')}${a('#/estante', 'lib', IC.books, 'Estante')}
+    ${a('#/estante', 'lib', IC.books, 'Estante')}
     <button class="plus" id="newbtn" aria-label="Criar">+</button>
-    ${a('#/salvos', 'saved', IC.bookmark, 'Salvos')}${a('#/perfil', 'me', IC.user, 'Perfil')}</div></nav>`;
+    ${a('#/perfil', 'me', IC.user, 'Perfil')}</div></nav>`;
 }
 function masthead() {
   const d = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -1105,20 +1109,6 @@ function masthead() {
   `;
 }
 
-function feedView() {
-  const reading = db.books.filter(b => b.status === 'reading');
-  const items = feedItems();
-  return `${header()}<main class="view">
-    ${masthead()}
-    <section class="stories dots" aria-label="Lendo agora"><div class="strack">
-      <button class="story new" id="newpost" aria-label="Nova publicação"><span class="lacering"><span class="thumb">+</span></span><span class="sl">Novo</span></button>
-      ${reading.map(b => `<a class="story" href="#/livro/${b.id}"><span class="lacering"><span class="thumb">${cover(b)}</span></span><span class="sl">${esc(b.title)}${b.pages ? ` · ${pct(b)}%` : ''}</span></a>`).join('')}
-    </div></section>
-    <button class="composer post" id="composer">${avatar()}<span>No que você está pensando, ${esc((db.profile.name || '').split(' ')[0] || 'leitora')}?</span></button>
-    ${items.length ? items.map(postCard).join('') : `<div class="empty">Sua linha do tempo está vazia. Registre uma leitura ou escreva uma nota ✿</div>`}
-    <p class="endnote">Só você vê o que está aqui ✿</p>
-  </main>`;
-}
 function savedView() {
   const items = feedItems().filter(i => soc(i.key).saved);
   return `${header()}<main class="view"><h2 class="sh"><span>Salvos</span></h2>
@@ -1138,6 +1128,7 @@ function libraryView() {
   const want = db.books.filter(b => b.status === 'want');
   const pages = read.reduce((s, b) => s + (b.pages || 0), 0), a = avg(read), goal = Number(db.profile.goal) || 0;
   return `${header()}<main class="view lib">
+    ${masthead()}
     <section class="yearbar">
       <div class="yb-top"><button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button><span class="y">${year}</span><button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.3;cursor:default"' : ''}>›</button>
         <button class="btn sm" id="add" style="margin-left:auto">+ Livro</button></div>
@@ -1431,7 +1422,7 @@ function composeDialog(kind = 'note') {
   $('#cf', d).onsubmit = e => {
     e.preventDefault(); const text = $('#ct', d).value.trim(); if (!text) return;
     db.posts.push({ id: uid(), kind: k, bookId: $('#cbk', d).value, text, ts: Date.now() });
-    save(); closeDlg(); if (location.hash !== '#/') location.hash = '#/'; else render(); toast('Publicado ✿');
+    save(); closeDlg(); profTab = 'posts'; if (location.hash !== '#/perfil') location.hash = '#/perfil'; else render(); toast('Publicada no seu perfil ✿');
   };
 }
 function createDialog() {
@@ -1553,12 +1544,11 @@ function bind() {
 
 function render() {
   if (locked) return;
-  const h = location.hash; let m, html, tab = 'home';
+  const h = location.hash; let m, html, tab = 'lib';
   if (h === '#/perfil') { html = profileView(); tab = 'me'; }
-  else if (h === '#/estante') { html = libraryView(); tab = 'lib'; }
   else if (h === '#/salvos') { html = savedView(); tab = 'saved'; }
   else if ((m = h.match(/^#\/livro\/(.+)$/))) { html = bookView(m[1]); tab = 'lib'; }
-  else html = feedView();
+  else html = libraryView();
   $('#app').innerHTML = html + navHTML(tab);
   bind();
 }

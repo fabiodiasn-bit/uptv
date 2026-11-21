@@ -684,3 +684,7 @@ html,body{overflow-x:hidden}
 .mh-cols{white-space:pre-line}
 .pact{justify-content:space-between}
 .mh-cols{height:auto;max-height:76px}
+
+.lib .mh-wrap{margin-bottom:16px}
+.tabin{justify-content:space-around}
+.tabin a{max-width:140px}

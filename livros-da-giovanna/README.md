@@ -10,7 +10,7 @@ PORT=8080 npm start
 Precisa apenas do Node 16+ (sem `npm install`). Também funciona abrindo `index.html` direto no navegador.
 
 ## Recursos
-- Feed privado estilo rede social (publicações, curtir, comentar, salvar, stories de "lendo agora")
+- Abre direto na Estante; publicações, salvos e jornal editável no perfil e na estante
 - Estante compacta em carrosséis; clique na capa para ampliar (sinopse e sumário)
 - Capas buscadas na internet (Google Livros e Open Library) e guardadas no app; ou envie a sua
 - Perfil com foto em moldura de renda, destaques e estatísticas
