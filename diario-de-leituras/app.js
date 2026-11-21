@@ -30,15 +30,16 @@ const avatar = (cls = '') => db.profile.photo
   : `<span class="avatar ${cls}">${esc((db.profile.name || 'L').trim()[0].toUpperCase())}</span>`;
 
 /* ---------- views ---------- */
-function header() {
-  return `<header class="top"><a class="brand" href="#/">Leituras</a>
-    <a class="me" href="#/perfil">${esc(db.profile.name || 'Seu perfil')}${avatar()}</a></header>`;
-}
+const hashN = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const PAL = [['#a07cf5','#6b3fd0'],['#8b5cf0','#4b2a9e'],['#7c4dde','#2e175f'],['#b08af7','#7c4dde'],['#6b3fd0','#241350'],['#9d78ee','#43228a']];
+const cover = (b, cls = '') => { const [x, y] = PAL[hashN(b.title) % PAL.length]; return `<span class="cover ${cls}" style="--a:${x};--c:${y}"><b>${esc(b.title)}</b><i>${esc(b.author)}</i></span>`; };
 
-function rowRead(b) {
-  return `<a class="row" href="#/livro/${b.id}"><div><div class="t">${esc(b.title)}</div><div class="a">${esc(b.author)}</div></div>
-    <div class="r">${b.rating > 0 ? stars(b.rating) + '<br>' : ''}${fmtD(b.finishedAt)}</div></a>`;
+function header() {
+  return `<header class="top"><a class="brand" href="#/"><span class="logo">✦</span>Leituras</a>
+    <nav class="nav"><button class="btn sm" id="add">+ Novo livro</button>
+    <a class="me" href="#/perfil">${avatar()}<span class="nm">${esc(db.profile.name || 'Meu perfil')}</span></a></nav></header>`;
 }
+const tile = b => `<a class="tile" href="#/livro/${b.id}">${cover(b)}<div class="tm">${b.rating > 0 ? stars(b.rating) : '<span></span>'}<span>${fmtD(b.finishedAt)}</span></div></a>`;
 
 function home() {
   const years = [...new Set([new Date().getFullYear(), ...db.books.map(bookYear)])].sort((a, b) => b - a);
@@ -50,29 +51,29 @@ function home() {
   const pages = read.reduce((s, b) => s + (b.pages || 0), 0);
   const a = avg(read);
   return `${header()}<main class="view">
-    <div class="year">
-      <button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.25;cursor:default"' : ''}>‹</button>
-      <span class="y">${year}</span>
-      <button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.25;cursor:default"' : ''}>›</button>
-    </div>
-    <div class="stats">
-      <div class="stat"><b>${read.length}</b><span>${read.length === 1 ? 'livro lido' : 'livros lidos'}</span></div>
-      <div class="stat"><b>${pages.toLocaleString('pt-BR')}</b><span>páginas</span></div>
-      <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
-    </div>
+    <section class="hero-card">
+      <div class="year">
+        <button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button>
+        <span class="y">${year}</span>
+        <button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.3;cursor:default"' : ''}>›</button>
+      </div>
+      <p class="lede">${read.length ? 'Seu ano em livros' : 'Suas leituras deste ano aparecem aqui'}</p>
+      <div class="stats">
+        <div class="stat"><b>${read.length}</b><span>${read.length === 1 ? 'livro lido' : 'livros lidos'}</span></div>
+        <div class="stat"><b>${pages.toLocaleString('pt-BR')}</b><span>páginas</span></div>
+        <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
+      </div>
+    </section>
 
-    ${reading.length ? `<section class="sec"><p class="eyebrow">Lendo agora</p><div class="list">
-      ${reading.map(b => `<a class="row" href="#/livro/${b.id}"><div style="flex:1"><div class="t">${esc(b.title)}</div><div class="a">${esc(b.author)}</div>
-        ${b.pages ? `<div class="bar"><i style="width:${pct(b)}%"></i></div>` : ''}</div>
-        <div class="r">${b.pages ? pct(b) + '%' : lastPage(b) ? 'pág. ' + lastPage(b) : ''}</div></a>`).join('')}</div></section>` : ''}
+    ${reading.length ? `<section class="sec"><h2 class="sh">Lendo agora</h2><div class="stack">
+      ${reading.map(b => `<a class="card reading" href="#/livro/${b.id}">${cover(b, 'sm')}<div class="grow"><div class="t">${esc(b.title)}</div><div class="a">${esc(b.author)}</div>
+        ${b.pages ? `<div class="bar"><i style="width:${pct(b)}%"></i></div><div class="pc">${pct(b)}% · página ${lastPage(b)} de ${b.pages}</div>` : lastPage(b) ? `<div class="pc">página ${lastPage(b)}</div>` : ''}</div></a>`).join('')}</div></section>` : ''}
 
-    <section class="sec"><p class="eyebrow">Lidos em ${year}</p>
-      ${read.length ? `<div class="list">${read.map(rowRead).join('')}</div>` : `<div class="empty">Nenhuma leitura concluída ainda.</div>`}</section>
+    <section class="sec"><h2 class="sh">Lidos em ${year}</h2>
+      ${read.length ? `<div class="grid">${read.map(tile).join('')}</div>` : `<div class="empty">Nenhuma leitura concluída em ${year} ainda.</div>`}</section>
 
-    ${want.length ? `<section class="sec"><p class="eyebrow">Para ler</p><div class="list">
-      ${want.map(b => `<a class="row" href="#/livro/${b.id}"><div><div class="t">${esc(b.title)}</div><div class="a">${esc(b.author)}</div></div></a>`).join('')}</div></section>` : ''}
-
-    <div class="actions" style="margin-top:56px"><button class="btn" id="add">Novo livro</button></div>
+    ${want.length ? `<section class="sec"><h2 class="sh">Para ler</h2><div class="wants">
+      ${want.map(b => `<a class="want" href="#/livro/${b.id}"><span class="t">${esc(b.title)}</span><span class="a">${esc(b.author)}</span></a>`).join('')}</div></section>` : ''}
   </main>`;
 }
 
@@ -82,34 +83,32 @@ function bookView(id) {
   const label = { want: 'Para ler', reading: 'Lendo', read: 'Lido' }[b.status];
   const log = [...(b.log || [])].sort((x, y) => y.date.localeCompare(x.date) || y.id.localeCompare(x.id));
   const meta = [b.pages ? b.pages + ' páginas' : '', b.startedAt ? 'iniciado em ' + fmtD(b.startedAt, true) : '', b.status === 'read' && b.finishedAt ? 'concluído em ' + fmtD(b.finishedAt, true) : ''].filter(Boolean).join(' · ');
-  return `<a class="back" href="#/">← Voltar</a><main class="view">
-    <span class="chip">${label}</span>
-    <h1>${esc(b.title)}</h1>
-    ${b.author ? `<p class="by">${esc(b.author)}</p>` : ''}
-    ${meta ? `<p class="meta">${meta}</p>` : ''}
+  return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
+    <section class="card bookhead">${cover(b, 'lg')}<div>
+      <span class="chip">${label}</span><h1>${esc(b.title)}</h1>
+      ${b.author ? `<p class="by">${esc(b.author)}</p>` : ''}${meta ? `<p class="meta">${meta}</p>` : ''}
+      <div class="actions">
+        ${b.status === 'want' ? `<button class="btn" id="start">Começar a ler</button>` : ''}
+        ${b.status === 'reading' ? `<button class="btn" id="finish">Concluí a leitura</button>` : ''}
+        <button class="btn ghost" id="edit">Editar livro</button>
+      </div></div></section>
 
-    ${b.status === 'read' ? `<section class="sec" style="margin-top:36px">
-      <div>${stars(b.rating || 0, 'big')} <span class="muted" style="margin-left:8px;font-size:13px">${b.rating > 0 ? fmtR(b.rating) + ' de 5' : 'sem nota'}</span></div>
-      ${b.review ? `<p class="review">${esc(b.review)}</p>` : `<p class="empty" style="padding-left:0">Ainda sem resenha.</p>`}
-      <div class="actions"><button class="btn ghost" id="finish">${b.review || b.rating ? 'Editar resenha' : 'Escrever resenha'}</button></div></section>` : ''}
+    ${b.status === 'read' ? `<section class="card sec" style="margin-top:20px">
+      <div class="rrow">${stars(b.rating || 0, 'big')}<span class="muted" style="font-size:13px">${b.rating > 0 ? fmtR(b.rating) + ' de 5' : 'sem nota'}</span></div>
+      ${b.review ? `<p class="review">${esc(b.review)}</p>` : `<p class="muted" style="margin:14px 0 0">Ainda sem resenha.</p>`}
+      <div class="actions"><button class="btn ghost sm" id="finish">${b.review || b.rating ? 'Editar resenha' : 'Escrever resenha'}</button></div></section>` : ''}
 
-    ${b.status === 'want' ? `<div class="actions"><button class="btn" id="start">Começar a ler</button></div>` : ''}
-
-    ${b.status === 'reading' ? `<section class="sec" style="margin-top:36px">
-      ${b.pages ? `<div style="display:flex;justify-content:space-between;font-size:13px" class="muted"><span>${lastPage(b)} de ${b.pages} páginas</span><span>${pct(b)}%</span></div><div class="bar" style="height:3px"><i style="width:${pct(b)}%"></i></div>` : ''}
-      <form id="logf" class="quick" style="margin-top:28px">
+    ${b.status === 'reading' ? `<section class="card" style="margin-top:20px">
+      <h2 class="sh" style="font-size:22px">Registrar leitura</h2>
+      ${b.pages ? `<div style="display:flex;justify-content:space-between;font-size:13px" class="muted"><span>${lastPage(b)} de ${b.pages} páginas</span><span>${pct(b)}%</span></div><div class="bar"><i style="width:${pct(b)}%"></i></div>` : ''}
+      <form id="logf" class="quick" style="margin-top:18px">
         <div><label for="lp">Página</label><input id="lp" type="number" min="0" inputmode="numeric" placeholder="${lastPage(b) || ''}"></div>
         <div><label for="ln">Como está sendo?</label><input id="ln" type="text" placeholder="Uma anotação, uma citação…"></div>
         <button class="btn" type="submit">Registrar</button>
       </form></section>` : ''}
 
-    ${log.length ? `<section class="sec"><p class="eyebrow">Histórico de leitura</p><ul class="log">
+    ${log.length ? `<section class="card" style="margin-top:20px"><h2 class="sh" style="font-size:22px">Histórico de leitura</h2><ul class="log">
       ${log.map(e => `<li><div class="d"><span>${fmtD(e.date, true)}</span>${e.page ? `<span>· pág. ${e.page}</span>` : ''}<button class="x" data-del="${e.id}" aria-label="Remover registro">✕</button></div>${e.note ? `<div class="n">${esc(e.note)}</div>` : ''}</li>`).join('')}</ul></section>` : ''}
-
-    <div class="actions" style="margin-top:48px">
-      ${b.status === 'reading' ? `<button class="btn" id="finish">Concluí a leitura</button>` : ''}
-      <button class="link" id="edit">Editar livro</button>
-    </div>
   </main>`;
 }
 
@@ -117,22 +116,28 @@ function profileView() {
   const p = db.profile, read = db.books.filter(b => b.status === 'read');
   const favs = (p.favorites || []).map(getBook).filter(Boolean);
   const byYear = {}; read.forEach(b => { const y = bookYear(b); byYear[y] = (byYear[y] || 0) + 1; });
+  const mx = Math.max(1, ...Object.values(byYear));
   const a = avg(read);
-  return `<a class="back" href="#/">← Voltar</a><main class="view">
-    <div class="hero">${avatar('lg')}<div><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div></div>
-    <div class="actions"><button class="btn ghost" id="editp">Editar perfil</button></div>
-    <div class="stats" style="margin-top:36px">
+  return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
+    <section class="card" style="padding:0;overflow:hidden"><div class="banner"></div><div class="pcard">
+      <div class="hero">${avatar('lg')}<div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
+      <button class="btn ghost sm" id="editp">Editar perfil</button></div></div></section>
+
+    <div class="stats light" style="margin-top:20px">
       <div class="stat"><b>${read.length}</b><span>livros lidos</span></div>
       <div class="stat"><b>${read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString('pt-BR')}</b><span>páginas</span></div>
       <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
     </div>
-    <section class="sec"><p class="eyebrow">Favoritos</p>
-      ${favs.length ? `<ol class="favs">${favs.map(b => `<li><a href="#/livro/${b.id}">${esc(b.title)}</a><span class="muted" style="font-size:13px">${esc(b.author)}</span></li>`).join('')}</ol>` : `<div class="empty">Escolha até cinco livros em “Editar perfil”.</div>`}</section>
-    ${Object.keys(byYear).length ? `<section class="sec"><p class="eyebrow">Ano a ano</p><div class="list">
-      ${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="row" style="cursor:pointer" data-goyear="${y}"><span class="t">${y}</span><span class="r">${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div></section>` : ''}
-    <section class="sec"><p class="eyebrow">Seus dados</p>
-      <p class="muted" style="margin:0 0 14px;font-size:13px;max-width:46ch">Tudo fica salvo neste aparelho, neste navegador. Exporte um backup de tempos em tempos, ou para levar seu perfil para outro aparelho.</p>
-      <div class="actions" style="margin-top:0"><button class="btn ghost" id="exp">Exportar backup</button><button class="btn ghost" id="imp">Importar backup</button><input type="file" id="impf" accept="application/json" hidden></div></section>
+
+    <section class="sec"><h2 class="sh">Top favoritos</h2>
+      ${favs.length ? `<ol class="favs">${favs.map((b, i) => `<li><span class="rank">${i + 1}</span><a href="#/livro/${b.id}">${cover(b)}</a></li>`).join('')}</ol>` : `<div class="empty">Escolha até cinco livros em “Editar perfil”.</div>`}</section>
+
+    ${Object.keys(byYear).length ? `<section class="sec"><h2 class="sh">Ano a ano</h2><div class="card years">
+      ${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="yr" data-goyear="${y}"><b>${y}</b><div class="bar"><i style="width:${byYear[y] / mx * 100}%"></i></div><span>${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div></section>` : ''}
+
+    <section class="sec"><h2 class="sh">Seus dados</h2><div class="card">
+      <p class="muted" style="margin:0;font-size:13px;max-width:52ch">Tudo fica salvo neste aparelho, neste navegador. Exporte um backup de tempos em tempos, ou para levar seu perfil para outro aparelho.</p>
+      <div class="actions" style="margin-top:16px"><button class="btn ghost sm" id="exp">Exportar backup</button><button class="btn ghost sm" id="imp">Importar backup</button><input type="file" id="impf" accept="application/json" hidden></div></div></section>
   </main>`;
 }
 
