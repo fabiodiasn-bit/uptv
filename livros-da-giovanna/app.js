@@ -12,8 +12,8 @@ let db = load();
 let year = new Date().getFullYear();
 
 function load() {
-  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && Array.isArray(d.books)) return { profile: { name: '', bio: '', photo: '', favorites: [], ...d.profile }, books: d.books, seeded: !!d.seeded }; } catch {}
-  return { profile: { name: '', bio: '', photo: '', favorites: [] }, books: [], seeded: false };
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && Array.isArray(d.books)) return { profile: { name: '', bio: '', photo: '', favorites: [], ...d.profile }, books: d.books, seeded: !!d.seeded, posts: d.posts || [], social: d.social || {}, coverRetry: !!d.coverRetry, postsSeeded: !!d.postsSeeded }; } catch {}
+  return { profile: { name: '', bio: '', photo: '', favorites: [] }, books: [], seeded: false, posts: [], social: {}, coverRetry: false, postsSeeded: false };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { toast('Não foi possível salvar: armazenamento cheio.'); } }
 let tt; function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2400); }
@@ -91,6 +91,22 @@ function seed() {
   db.seeded = true; save();
 }
 
+function seedPosts() {
+  if (!db.postsSeeded && !db.posts.length && db.books.some(b => b.sample)) {
+    const by2 = t => db.books.find(b => b.title === t)?.id || '';
+    const T = s => new Date(s + 'T18:30:00').getTime();
+    const mk = (kind, bookId, text, d) => ({ id: uid(), kind, bookId, text, ts: T(d), sample: true });
+    db.posts = [
+      mk('note', by2('Cem Anos de Solidão'), 'Tantos Aurelianos que já estou desenhando a árvore genealógica no caderno ✿', '2026-11-19'),
+      mk('quote', '', 'Ler é uma forma de morar em outros lugares.', '2026-11-12'),
+      mk('note', by2('Grande Sertão: Veredas'), 'Primeira vez que leio devagar só pelo som das palavras ♡', '2026-11-10')
+    ];
+    db.social['post:' + db.posts[0].id] = { liked: true, saved: false, comments: [{ id: uid(), text: 'Lembrar de comprar post-its coloridos pra marcar as páginas.', ts: T('2026-11-19') + 3600000 }] };
+    db.social['post:' + db.posts[1].id] = { liked: true, saved: true, comments: [] };
+  }
+  db.postsSeeded = true; save();
+}
+
 /* ---------- capas ilustradas (arte própria, livros de domínio público) ---------- */
 const svgUri = s => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
 const SVG_HEAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 540" width="360" height="540">';
@@ -123,27 +139,59 @@ const ART = {
 };
 function applySampleArt() {
   let ch = false;
-  db.books.forEach(b => { if (b.sample && !b.cover && ART[b.title]) { b.cover = svgUri(ART[b.title]()); b.coverTried = true; ch = true; } });
+  if (!db.coverRetry) { db.books.forEach(b => { if (!b.cover) b.coverTried = false; }); db.coverRetry = true; ch = true; }
+  db.books.forEach(b => {
+    if (b.sample && b.cover && b.cover.startsWith('data:image/svg+xml')) { b.art = b.cover; b.cover = ''; b.coverTried = false; ch = true; }
+    if (b.sample && !b.art && ART[b.title]) { b.art = svgUri(ART[b.title]()); ch = true; }
+  });
   if (ch) save();
 }
 
 /* ---------- covers ---------- */
 let coverTimer;
+function loadImg(url, cors) {
+  return new Promise(res => { const i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+}
+// baixa a imagem e guarda uma cópia reduzida no próprio app (funciona sem internet depois)
+async function cacheImg(url) {
+  let i = await loadImg(url, true);
+  if (i && i.naturalWidth >= 60) {
+    try { const s = Math.min(1, 360 / i.naturalWidth), c = document.createElement('canvas'); c.width = Math.round(i.naturalWidth * s); c.height = Math.round(i.naturalHeight * s); c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', .82); } catch { return url; }
+  }
+  i = await loadImg(url, false);
+  return i && i.naturalWidth >= 60 ? url : null;
+}
+async function lookupCoverUrl(b) {
+  let gErr = false, oErr = false;
+  try { // Google Livros
+    const q = `intitle:${b.title}${b.author ? ' inauthor:' + b.author : ''}`;
+    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books`);
+    if (!r.ok) throw 0;
+    const it = ((await r.json()).items || []).find(x => x.volumeInfo && x.volumeInfo.imageLinks);
+    if (it) { const l = it.volumeInfo.imageLinks; const u = (l.thumbnail || l.smallThumbnail || '').replace('http://', 'https://').replace('&edge=curl', '').replace(/zoom=\d/, 'zoom=2'); if (u) return u; }
+  } catch { gErr = true; }
+  try { // Open Library
+    const r = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(b.title)}${b.author ? '&author=' + encodeURIComponent(b.author) : ''}&limit=8&fields=cover_i`);
+    if (!r.ok) throw 0;
+    const d = ((await r.json()).docs || []).find(x => x.cover_i);
+    if (d) return `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`;
+  } catch { oErr = true; }
+  if (gErr && oErr) throw new Error('offline');
+  return null;
+}
 async function findCover(b) {
   if (b.cover || b.coverTried) return;
   try {
-    const u = `https://openlibrary.org/search.json?title=${encodeURIComponent(b.title)}${b.author ? '&author=' + encodeURIComponent(b.author) : ''}&limit=8&fields=cover_i`;
-    const r = await fetch(u); if (!r.ok) return;
-    const doc = ((await r.json()).docs || []).find(x => x.cover_i);
+    const url = await lookupCoverUrl(b);
+    if (!url) { b.coverTried = true; save(); return; }
+    const data = await cacheImg(url);
     b.coverTried = true;
-    if (!doc) { save(); return; }
-    const url = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-    await new Promise((ok, no) => { const i = new Image(); i.onload = ok; i.onerror = no; i.src = url; });
-    b.cover = url; save();
-    clearTimeout(coverTimer); coverTimer = setTimeout(() => { if (!dlg.open && !zoomDlg.open) render(); }, 500);
+    if (!data) { save(); return; }
+    b.cover = data; save();
+    clearTimeout(coverTimer); coverTimer = setTimeout(() => { if (!dlg.open && !zoomDlg.open && !locked) render(); }, 600);
   } catch { /* sem internet: tenta de novo na próxima abertura */ }
 }
-async function findAllCovers() { for (const b of [...db.books]) await findCover(b); }
+async function findAllCovers() { for (const b of [...db.books]) { await findCover(b); await new Promise(r => setTimeout(r, 250)); } }
 function fileToCover(file, W = 360, H = 540) {
   return new Promise((ok, no) => {
     const img = new Image(), url = URL.createObjectURL(file);
@@ -216,6 +264,15 @@ function wirePicker(d, st, nameEl) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><mask id="m"><rect width="100" height="100" fill="#fff"/>${holes.join('')}<circle cx="50" cy="50" r="38.2" fill="#000"/></mask></defs><g mask="url(#m)" fill="#fbf5e8" stroke="#c9ad86" stroke-width=".6"><circle cx="50" cy="50" r="${R}"/>${bumps}</g></svg>`;
   document.documentElement.style.setProperty('--lace', `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`);
 })();
+
+(function () {
+  let sc = '', holes = '';
+  for (let i = 0; i < 12; i++) { const p = 24 + i * 13.45; for (const [x, y] of [[p, 12], [p, 188], [12, p], [188, p]]) sc += `<circle cx="${x.toFixed(1)}" cy="${y}" r="8.2"/>`.replace(/cx="([\d.]+)" cy="(\d+)"/, (m, a, b) => `cx="${a}" cy="${b}"`); }
+  for (let i = 0; i < 11; i++) { const p = 30.7 + i * 13.45; for (const [x, y] of [[p, 13], [p, 187], [13, p], [187, p]]) holes += `<circle cx="${x.toFixed(1)}" cy="${y}" r="2" fill="#000"/>`; }
+  for (let i = 0; i < 9; i++) { const p = 38 + i * 15.5; for (const [x, y] of [[p, 25], [p, 175], [25, p], [175, p]]) holes += `<circle cx="${x.toFixed(1)}" cy="${y}" r="1.5" fill="#000"/>`; }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><mask id="m"><rect width="200" height="200" fill="#fff"/>${holes}<rect x="28" y="28" width="144" height="144" rx="3" fill="#000"/></mask></defs><g mask="url(#m)" fill="#f4e6c9" stroke="#c9ad7f" stroke-width=".8"><rect x="10" y="10" width="180" height="180" rx="8"/>${sc}</g><rect x="27" y="27" width="146" height="146" rx="4" fill="none" stroke="#c9ad7f" stroke-width="1.2"/></svg>`;
+  document.documentElement.style.setProperty('--lace-frame', `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`);
+})();
 const SCRIB = {
   zig: '<svg class="scrib CLS" style="STY" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 18 L14 4 L26 20 L38 4 L50 20 L62 4 L78 18"/></svg>',
   loop: '<svg class="scrib CLS" style="STY" viewBox="0 0 80 28" aria-hidden="true"><path d="M2 22 C14 2 30 2 26 15 C22 25 10 14 30 8 C48 2 58 24 78 8"/></svg>',
@@ -242,9 +299,10 @@ function collage(kind) {
 const hashN = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 const PAL = [['#a8774f','#6a4429'],['#8b5cf0','#4b2a9e'],['#b08968','#6f4a30'],['#7c4dde','#2e175f'],['#9c7a5b','#5a3b27'],['#a07cf5','#6b3fd0']];
 const cover = (b, cls = '') => {
-  const [x, y] = PAL[hashN(b.title) % PAL.length];
-  return `<span class="cover ${cls} ${b.cover ? 'has-img' : ''}" style="--a:${x};--c:${y}"><b>${esc(b.title)}</b><i>${esc(b.author)}</i>${b.cover ? `<img src="${esc(b.cover)}" alt="Capa de ${esc(b.title)}" loading="lazy" draggable="false" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('has-img');this.remove()">` : ''}</span>`;
+  const [x, y] = PAL[hashN(b.title) % PAL.length], src = b.cover || b.art;
+  return `<span class="cover ${cls} ${src ? 'has-img' : ''}" style="--a:${x};--c:${y}"><b>${esc(b.title)}</b><i>${esc(b.author)}</i>${src ? `<img src="${esc(src)}" ${b.cover && b.art ? `data-art="${esc(b.art)}"` : ''} alt="Capa de ${esc(b.title)}" loading="lazy" draggable="false" referrerpolicy="no-referrer" onerror="coverFail(this)">` : ''}</span>`;
 };
+function coverFail(img) { if (img.dataset.art && img.getAttribute('src') !== img.dataset.art) { img.src = img.dataset.art; } else { img.parentNode.classList.remove('has-img'); img.remove(); } }
 const STATUS = { want: 'Para ler', reading: 'Lendo', read: 'Lido' };
 
 function carousel(items, render, label) {
@@ -252,60 +310,142 @@ function carousel(items, render, label) {
     <div class="track" tabindex="0" role="list" aria-label="${esc(label)}">${items.map((it, i) => `<div class="item" role="listitem">${render(it, i)}</div>`).join('')}</div>
     <button class="cbtn next" aria-label="Próximo">›</button></div>`;
 }
-const slide = (b, meta = '', rank = 0) => `<article class="slide">
-  <button class="coverbtn" data-zoom="${b.id}" aria-label="Ampliar a capa de ${esc(b.title)}">${rank ? `<span class="rank">${rank}</span>` : ''}${cover(b)}<span class="hint">Ampliar</span></button>
-  <a class="st" href="#/livro/${b.id}">${esc(b.title)}</a><div class="sa">${esc(b.author)}</div>${meta}</article>`;
 const metaRead = b => `<div class="smeta">${b.rating > 0 ? stars(b.rating) : '<span></span>'}<span>${fmtD(b.finishedAt)}</span></div>`;
 const metaReading = b => b.pages ? `<div class="bar"><i style="width:${pct(b)}%"></i></div><div class="smeta"><span>${pct(b)}%</span><span>pág. ${lastPage(b)}/${b.pages}</span></div>` : (lastPage(b) ? `<div class="smeta"><span>pág. ${lastPage(b)}</span></div>` : '');
 
+/* ---------- ícones ---------- */
+const IC = {
+  home: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  books: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><path d="M16.5 5.5l4 1-3.6 14-4-1z"/></svg>',
+  bookmark: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 5.8-8 11-8 11z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  send: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6 8-6s7 1.5 8 6"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
+};
+
+/* ---------- peças sociais ---------- */
+let locked = false, unlocked = false, profTab = 'posts';
+const soc = k => (db.social[k] = db.social[k] || { liked: false, saved: false, comments: [] });
+const dayTs = s => new Date(s + 'T12:00:00').getTime();
+function ago(t) {
+  const d = Math.floor((Date.now() - t) / 864e5);
+  if (d <= 0) return 'hoje'; if (d === 1) return 'ontem'; if (d < 7) return `há ${d} dias`;
+  return new Date(t).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', ...(d > 300 ? { year: 'numeric' } : {}) }).replace('.', '');
+}
+const stamp = (text, cls = '') => `<div class="stamp ${cls}">${esc(text)}</div>`;
+const miniBook = b => `<button class="coverbtn mini" data-zoom="${b.id}" aria-label="Ampliar a capa de ${esc(b.title)}">${cover(b, 'xs')}</button>`;
+function feedItems() {
+  const items = [];
+  db.books.forEach(b => {
+    (b.log || []).forEach(e => items.push({ key: 'log:' + e.id, type: 'log', book: b, e, t: e.ts || dayTs(e.date) }));
+    if (b.status === 'read' && (b.review || b.rating)) items.push({ key: 'rev:' + b.id, type: 'review', book: b, t: dayTs(b.finishedAt || b.addedAt) + 7200000 });
+  });
+  db.posts.forEach(p => items.push({ key: 'post:' + p.id, type: p.kind, post: p, book: getBook(p.bookId), t: p.ts }));
+  return items.sort((a, b) => b.t - a.t);
+}
+function postCard(it) {
+  const s = soc(it.key), b = it.book, p = db.profile, name = p.name || 'Você', manual = !!it.post;
+  const bookLink = b => `<a href="#/livro/${b.id}">${esc(b.title)}</a>`;
+  let body = '';
+  if (it.type === 'log') {
+    const e = it.e, pc = b.pages && e.page ? Math.min(100, Math.round(e.page / b.pages * 100)) : 0;
+    body = `<div class="pbook">${miniBook(b)}<div class="pt"><div class="pl">Leu${e.page ? ` até a <b>página ${e.page}</b>` : ''} de ${bookLink(b)}</div>${pc ? `<div class="bar"><i style="width:${pc}%"></i></div><div class="pc">${pc}% do livro</div>` : ''}</div></div>${e.note ? `<p class="ptext">${esc(e.note)}</p>` : ''}`;
+  } else if (it.type === 'review') {
+    body = `<div class="pbook">${miniBook(b)}<div class="pt"><div class="pl">Terminou ${bookLink(b)}</div><div>${stars(b.rating || 0)}${b.rating > 0 ? `<span class="pc" style="margin-left:6px">${fmtR(b.rating)} de 5</span>` : ''}</div></div></div>${b.review ? `<p class="ptext">${esc(b.review)}</p>` : ''}`;
+  } else if (it.type === 'quote') {
+    body = stamp(it.post.text, 'big') + (b ? `<div class="pbook" style="margin-top:12px">${miniBook(b)}<div class="pt"><div class="pl">${bookLink(b)}</div></div></div>` : '');
+  } else {
+    body = `${it.post.text ? `<p class="ptext">${esc(it.post.text)}</p>` : ''}${b ? `<div class="pbook">${miniBook(b)}<div class="pt"><div class="pl">Sobre ${bookLink(b)}</div><div class="pc">${esc(b.author)}</div></div></div>` : ''}`;
+  }
+  const shareText = it.type === 'review' ? `${b.title} — ${b.rating || 0}/5\n${b.review || ''}` : it.type === 'log' ? `${b.title}${it.e.page ? ' (pág. ' + it.e.page + ')' : ''}\n${it.e.note || ''}` : it.post.text;
+  return `<article class="post" data-key="${esc(it.key)}" data-share="${esc(shareText.trim())}">
+    <header class="phead">${avatar()}<div class="pwho"><b>${esc(name)}</b><span>${ago(it.t)} · só você vê</span></div>${manual ? `<button class="ab del" data-delpost="${it.post.id}" aria-label="Apagar publicação">${IC.trash}</button>` : ''}</header>
+    ${body}
+    <div class="pact">
+      <button class="ab like" data-like="${esc(it.key)}" aria-pressed="${s.liked}" aria-label="Curtir">${IC.heart}<span>${s.liked ? 'Curtido' : ''}</span></button>
+      <button class="ab" data-cmt="${esc(it.key)}" aria-label="Comentar">${IC.chat}<span class="cn">${s.comments.length || ''}</span></button>
+      <button class="ab save" data-save="${esc(it.key)}" aria-pressed="${s.saved}" aria-label="Salvar">${IC.bookmark}</button>
+      <button class="ab" data-sharebtn="${esc(it.key)}" aria-label="Copiar texto" style="margin-left:auto">${IC.send}</button>
+    </div>
+    <div class="cmts" data-cbox="${esc(it.key)}" hidden>${s.comments.map(c => cmtHTML(c)).join('')}
+      <form class="cmf" data-cform="${esc(it.key)}"><input type="text" maxlength="300" placeholder="Anotar um comentário…" aria-label="Comentário"><button class="btn sm" type="submit">Enviar</button></form></div>
+  </article>`;
+}
+const cmtHTML = c => `<div class="cm">${avatar()}<div><b>${esc(db.profile.name || 'Você')}</b> ${esc(c.text)}<div class="pc">${ago(c.ts)}</div></div></div>`;
+
 function header() {
+  const pin = !!db.profile.pin;
   return `<header class="top"><a class="brand" href="#/"><span class="logo">✦</span>Livros da Giovanna</a>
-    <nav class="nav"><button class="btn sm" id="add">+ Novo livro</button>
-    <a class="me" href="#/perfil">${avatar()}<span class="nm">${esc(db.profile.name || 'Meu perfil')}</span></a></nav></header>`;
+    <div class="nav"><span class="privacy">${IC.lock} Privado</span><button class="iconbtn" id="lockbtn" aria-label="${pin ? 'Bloquear o app' : 'Definir um PIN'}" title="${pin ? 'Bloquear' : 'Definir PIN'}">${IC.lock}</button></div></header>`;
+}
+function navHTML(tab) {
+  const a = (h, id, ic, l) => `<a href="${h}" class="${tab === id ? 'on' : ''}">${ic}<span>${l}</span></a>`;
+  return `<nav class="tabbar" aria-label="Navegação"><div class="tabin">
+    ${a('#/', 'home', IC.home, 'Início')}${a('#/estante', 'lib', IC.books, 'Estante')}
+    <button class="plus" id="newbtn" aria-label="Criar">+</button>
+    ${a('#/salvos', 'saved', IC.bookmark, 'Salvos')}${a('#/perfil', 'me', IC.user, 'Perfil')}</div></nav>`;
+}
+function masthead() {
+  const d = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return `<div class="mh-wrap" aria-hidden="true"><div class="masthead"><div class="mh-top"><span>DIÁRIO ${db.profile.name ? 'DE ' + esc(db.profile.name.toUpperCase()) : 'DE LEITURAS'}</span><span>${d}</span></div><div class="mh-cols">${NEWS[0]} ${NEWS[1]}</div></div></div>`;
 }
 
-function home() {
+function feedView() {
+  const reading = db.books.filter(b => b.status === 'reading');
+  const items = feedItems();
+  return `${header()}<main class="view">
+    ${masthead()}
+    <section class="stories dots" aria-label="Lendo agora"><div class="strack">
+      <button class="story new" id="newpost" aria-label="Nova publicação"><span class="lacering"><span class="thumb">+</span></span><span class="sl">Novo</span></button>
+      ${reading.map(b => `<a class="story" href="#/livro/${b.id}"><span class="lacering"><span class="thumb">${cover(b)}</span></span><span class="sl">${esc(b.title)}${b.pages ? ` · ${pct(b)}%` : ''}</span></a>`).join('')}
+    </div></section>
+    <button class="composer post" id="composer">${avatar()}<span>No que você está pensando, ${esc((db.profile.name || '').split(' ')[0] || 'leitora')}?</span></button>
+    ${items.length ? items.map(postCard).join('') : `<div class="empty">Sua linha do tempo está vazia. Registre uma leitura ou escreva uma nota ♡</div>`}
+    <p class="endnote">Só você vê o que está aqui ✿</p>
+  </main>`;
+}
+function savedView() {
+  const items = feedItems().filter(i => soc(i.key).saved);
+  return `${header()}<main class="view"><h2 class="sh"><span>Salvos</span></h2>
+    ${items.length ? items.map(postCard).join('') : `<div class="empty">Toque no marcador de uma publicação para guardá-la aqui.</div>`}</main>`;
+}
+
+const slide = (b, meta = '', rank = 0) => `<article class="slide">
+  <button class="coverbtn" data-zoom="${b.id}" aria-label="Ampliar a capa de ${esc(b.title)}">${rank ? `<span class="rank">${rank}</span>` : ''}${cover(b)}</button>
+  <a class="st" href="#/livro/${b.id}">${esc(b.title)}</a><div class="sa">${esc(b.author)}</div>${meta}</article>`;
+
+function libraryView() {
   const years = [...new Set([new Date().getFullYear(), ...db.books.map(bookYear)])].sort((a, b) => b - a);
   const min = years[years.length - 1], max = years[0];
   if (year > max) year = max; if (year < min) year = min;
   const reading = db.books.filter(b => b.status === 'reading');
   const read = db.books.filter(b => b.status === 'read' && bookYear(b) === year).sort((a, b) => (b.finishedAt || '').localeCompare(a.finishedAt || ''));
   const want = db.books.filter(b => b.status === 'want');
-  const pages = read.reduce((s, b) => s + (b.pages || 0), 0);
-  const a = avg(read), goal = Number(db.profile.goal) || 0;
-  return `${header()}<main class="view">
-    <section class="hero-card">
-      ${collage('hero')}${decor()}${companion(read, reading, goal)}
-      <div class="year">
-        <button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button>
-        <span class="y">${year}</span>
-        <button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.3;cursor:default"' : ''}>›</button>
-      </div>
-      <p class="lede">${read.length ? 'Seu ano em livros' : 'Suas leituras deste ano aparecem aqui'}</p>
-      <div class="stats">
-        <div class="stat"><b>${read.length}</b><span>${read.length === 1 ? 'livro lido' : 'livros lidos'}</span></div>
-        <div class="stat"><b>${pages.toLocaleString('pt-BR')}</b><span>páginas</span></div>
-        <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
-      </div>
-      ${goal ? `<div class="goal"><div class="gt"><span>♡ Meta de ${year}</span><b>${read.length} de ${goal} ${goal === 1 ? 'livro' : 'livros'}${read.length >= goal ? ' ✦' : ''}</b></div><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
+  const pages = read.reduce((s, b) => s + (b.pages || 0), 0), a = avg(read), goal = Number(db.profile.goal) || 0;
+  return `${header()}<main class="view lib">
+    <section class="yearbar">
+      <div class="yb-top"><button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button><span class="y">${year}</span><button class="arrow" data-year="1" aria-label="Próximo ano" ${year >= max ? 'disabled style="opacity:.3;cursor:default"' : ''}>›</button>
+        <button class="btn sm" id="add" style="margin-left:auto">+ Livro</button></div>
+      <div class="ystats"><span><b>${read.length}</b> ${read.length === 1 ? 'lido' : 'lidos'}</span><span><b>${pages.toLocaleString('pt-BR')}</b> páginas</span><span><b>${a ? fmtR(a.toFixed(1)) : '—'}</b> nota média</span></div>
+      ${goal ? `<div class="mgoal"><span>♡ Meta: ${read.length} de ${goal}</span><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
     </section>
-
     ${reading.length ? `<section class="sec"><h2 class="sh"><span>Lendo agora</span></h2>${carousel(reading, b => slide(b, metaReading(b)), 'Lendo agora')}</section>` : ''}
-
     <section class="sec"><h2 class="sh"><span>Lidos em ${year}</span></h2>
       ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda ♡</div>`}</section>
-
     ${want.length ? `<section class="sec"><h2 class="sh"><span>Para ler</span></h2>${carousel(want, b => slide(b), 'Para ler')}</section>` : ''}
   </main>`;
 }
 
 function bookView(id) {
   const b = getBook(id);
-  if (!b) return `${header()}<main class="view"><p class="empty">Livro não encontrado.</p><a class="link" href="#/">Voltar</a></main>`;
+  if (!b) return `${header()}<main class="view"><p class="empty">Livro não encontrado.</p><a class="link" href="#/estante">Voltar</a></main>`;
   const label = STATUS[b.status];
   const log = [...(b.log || [])].sort((x, y) => y.date.localeCompare(x.date) || y.id.localeCompare(x.id));
   const meta = [b.pages ? b.pages + ' páginas' : '', b.startedAt ? 'iniciado em ' + fmtD(b.startedAt, true) : '', b.status === 'read' && b.finishedAt ? 'concluído em ' + fmtD(b.finishedAt, true) : ''].filter(Boolean).join(' · ');
-  return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
+  return `${header()}<a class="back" href="#/estante">← Estante</a><main class="view">
     <section class="card bookhead"><button class="coverbtn" data-zoom="${b.id}" aria-label="Ampliar a capa">${cover(b, 'lg')}<span class="hint">Ampliar</span></button><div>
       <span class="chip">${label}</span><h1>${esc(b.title)}</h1>
       ${b.author ? `<p class="by">${esc(b.author)}</p>` : ''}${meta ? `<p class="meta">${meta}</p>` : ''}
@@ -340,26 +480,22 @@ function profileView() {
   const favs = (p.favorites || []).map(getBook).filter(Boolean);
   const byYear = {}; read.forEach(b => { const y = bookYear(b); byYear[y] = (byYear[y] || 0) + 1; });
   const mx = Math.max(1, ...Object.values(byYear));
-  const a = avg(read);
-  return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
-    <section class="card profilecard" style="padding:0"><div class="banner">${collage('banner')}${decor()}</div><div class="pcard">
-      <div class="hero"><label class="avatar-btn" title="Trocar foto">${avatar('lg')}<span class="cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><input type="file" id="quickph" accept="image/*" aria-label="Trocar foto de perfil"></label><div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
-      <button class="btn ghost sm" id="editp">Editar perfil</button></div></div></section>
-
-    <div class="stats light" style="margin-top:20px">
-      <div class="stat"><b>${read.length}</b><span>livros lidos</span></div>
-      <div class="stat"><b>${read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString('pt-BR')}</b><span>páginas</span></div>
-      <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
-    </div>
-
-    <section class="sec"><h2 class="sh"><span>Top favoritos</span></h2>
-      ${favs.length ? carousel(favs, (b, i) => slide(b, '', i + 1), 'Top favoritos') : `<div class="empty">Escolha até cinco livros em “Editar perfil”.</div>`}</section>
-
-    ${Object.keys(byYear).length ? `<section class="sec"><h2 class="sh"><span>Ano a ano</span></h2><div class="card years">
-      ${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="yr" data-goyear="${y}"><b>${y}</b><div class="bar"><i style="width:${byYear[y] / mx * 100}%"></i></div><span>${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div></section>` : ''}
-
+  const items = feedItems(), mine = items.filter(i => i.post || i.type === 'review'), saved = items.filter(i => soc(i.key).saved);
+  let tab;
+  if (profTab === 'saved') tab = saved.length ? saved.map(postCard).join('') : '<div class="empty">Nada salvo ainda.</div>';
+  else if (profTab === 'year') tab = Object.keys(byYear).length ? `<div class="card years">${Object.keys(byYear).sort((x, y) => y - x).map(y => `<div class="yr" data-goyear="${y}"><b>${y}</b><div class="bar"><i style="width:${byYear[y] / mx * 100}%"></i></div><span>${byYear[y]} ${byYear[y] === 1 ? 'livro' : 'livros'}</span></div>`).join('')}</div>` : '<div class="empty">Ainda sem leituras concluídas.</div>';
+  else tab = mine.length ? `<div class="pgrid">${mine.map(i => i.type === 'review' ? `<a class="t3" href="#/livro/${i.book.id}">${cover(i.book)}</a>` : `<div class="t3 txt ${i.type === 'quote' ? 'q' : ''}"><span>${esc(i.post.text)}</span></div>`).join('')}</div>` : '<div class="empty">Suas publicações aparecem aqui.</div>';
+  return `${header()}<main class="view prof">
+    <section class="pcardx"><div class="pbanner dots">${clip('dark', 'left:16px;top:14px;transform:rotate(-3deg)', 'DIÁRIO DE LEITURAS', NEWS[1])}${tape('b', 'left:8px;top:6px;transform:rotate(-32deg);width:70px')}${scrib('star', 'l', 'left:47%;top:20px;width:20px')}${scrib('zig', 'p', 'left:42%;bottom:24px;width:56px')}${decor()}${stamp('sou um museu de tudo que já li e amei', 'onbanner')}</div>
+      <div class="pbody"><label class="lframe avatar-btn" title="Trocar foto">${avatar('lg')}<span class="cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><input type="file" id="quickph" accept="image/*" aria-label="Trocar foto de perfil"></label>
+        <div class="pinfo"><h1>${esc(p.name || 'Seu nome')}</h1>${p.handle ? `<div class="handle">@${esc(p.handle)}</div>` : ''}${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
+          <div class="pstats"><div><b>${db.posts.length + read.filter(b => b.review || b.rating).length}</b><span>publicações</span></div><div><b>${read.length}</b><span>livros</span></div><div><b>${read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString('pt-BR')}</b><span>páginas</span></div></div>
+          <div class="actions" style="margin-top:12px"><button class="btn sm" id="editp">Editar perfil</button></div></div></div></section>
+    ${favs.length ? `<section class="sec"><h2 class="sh"><span>Destaques</span></h2>${carousel(favs, (b, i) => slide(b, '', i + 1), 'Destaques')}</section>` : ''}
+    <div class="ptabs" role="tablist">${[['posts', 'Publicações'], ['saved', 'Salvos'], ['year', 'Ano a ano']].map(([k, l]) => `<button role="tab" data-ptab="${k}" aria-selected="${profTab === k}">${l}</button>`).join('')}</div>
+    <div class="ptab">${tab}</div>
     <section class="sec"><h2 class="sh"><span>Seus dados</span></h2><div class="card">
-      <p class="muted" style="margin:0;font-size:13px;max-width:52ch">Tudo fica salvo neste aparelho, neste navegador. Exporte um backup de tempos em tempos, ou para levar seu perfil para outro aparelho.</p>
+      <p class="muted" style="margin:0;font-size:13px;max-width:52ch">Tudo fica salvo só neste aparelho e neste navegador. Exporte um backup de tempos em tempos, ou para levar seu perfil para outro aparelho.</p>
       <div class="actions" style="margin-top:16px"><button class="btn ghost sm" id="exp">Exportar backup</button><button class="btn ghost sm" id="imp">Importar backup</button>${db.books.some(b => b.sample) ? '<button class="btn danger sm" id="rmsamples">Remover livros de exemplo</button>' : ''}</div></div></section>
   </main>`;
 }
@@ -462,7 +598,7 @@ function bookDialog(id) {
   if (id) $('#rm', d).onclick = async () => {
     if (!await askConfirm(`Excluir “${b.title}” e todo o seu histórico?`, 'Excluir')) return;
     db.books = db.books.filter(x => x.id !== id); db.profile.favorites = db.profile.favorites.filter(f => f !== id);
-    save(); closeDlg(); location.hash = '#/';
+    save(); closeDlg(); location.hash = '#/estante';
   };
   $('#bf', d).onsubmit = e => {
     e.preventDefault();
@@ -508,10 +644,13 @@ function profileDialog() {
   const opts = sel => `<option value="">—</option>` + db.books.map(b => `<option value="${b.id}" ${b.id === sel ? 'selected' : ''}>${esc(b.title)}</option>`).join('');
   const d = openDlg(`<form id="pf"><h2>Seu perfil ✿</h2>
     <label for="pn">Como você quer ser chamada?</label><input id="pn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
+    <label for="ph">Nome de usuária <span style="font-weight:400">(opcional)</span></label><input id="ph" type="text" maxlength="24" value="${esc(p.handle || '')}" autocomplete="off" placeholder="giovanna">
     ${pickerHTML(st, true)}
     <label>Símbolos fofinhos <span style="font-weight:400">(até 4, enfeitam seu perfil)</span></label><div class="gl-grid">${GLYPHS.map(g => `<button type="button" class="gl" aria-pressed="false" data-g="${g}">${g}</button>`).join('')}</div>
     <div class="two"><div><label for="pg">Meta de livros no ano</label><input id="pg" type="number" min="0" max="999" inputmode="numeric" value="${p.goal || ''}" placeholder="Ex.: 12"></div><div></div></div>
     <label for="pb">Sobre você</label><textarea id="pb" style="min-height:64px" placeholder="Uma frase sobre suas leituras">${esc(p.bio)}</textarea>
+    <label for="pp">PIN de privacidade <span style="font-weight:400">(opcional, 4 a 6 números)</span></label><input id="pp" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="${p.pin ? 'PIN ativo: deixe vazio para manter' : 'Ex.: 1234'}">
+    <p class="muted" style="font-size:12px;margin:6px 0 0">O PIN esconde o app ao abrir. Ele não criptografa os dados: quem usar este navegador pode ver o armazenamento.${p.pin ? ' <button class="link" type="button" id="rmpin">remover PIN</button>' : ''}</p>
     <label>Top livros favoritos</label>
     ${[0,1,2,3,4].map(i => `<select class="fv" style="margin-bottom:6px" aria-label="Favorito ${i + 1}">${opts((p.favorites || [])[i])}</select>`).join('')}
     ${db.books.length ? '' : '<p class="muted" style="font-size:12px">Adicione livros para escolhê-los aqui.</p>'}
@@ -521,9 +660,14 @@ function profileDialog() {
   d.querySelectorAll('.gl').forEach(b => b.onclick = () => { const g = b.dataset.g; if (stickers.includes(g)) stickers = stickers.filter(x => x !== g); else if (stickers.length < 4) stickers.push(g); else toast('São só 4 símbolos'); syncG(); });
   syncG();
   $('#cx', d).onclick = closeDlg;
-  $('#pf', d).onsubmit = e => {
+  let dropPin = false;
+  if ($('#rmpin', d)) $('#rmpin', d).onclick = () => { dropPin = true; $('#rmpin', d).textContent = 'PIN será removido'; };
+  $('#pf', d).onsubmit = async e => {
     e.preventDefault();
-    Object.assign(p, { name: $('#pn', d).value.trim(), bio: $('#pb', d).value.trim(), mascot: st.mascot, bg: st.bg, photo: st.photo, stickers, goal: Number($('#pg', d).value) || 0, welcomed: true });
+    const pinv = $('#pp', d).value.trim();
+    if (pinv && !/^\d{4,6}$/.test(pinv)) { toast('O PIN precisa ter de 4 a 6 números'); return; }
+    if (pinv) p.pin = await hashPin(pinv); else if (dropPin) p.pin = '';
+    Object.assign(p, { name: $('#pn', d).value.trim(), handle: $('#ph', d).value.trim().toLowerCase().replace(/[^a-z0-9._]/g, ''), bio: $('#pb', d).value.trim(), mascot: st.mascot, bg: st.bg, photo: st.photo, stickers, goal: Number($('#pg', d).value) || 0, welcomed: true });
     p.favorites = [...new Set([...d.querySelectorAll('.fv')].map(s => s.value).filter(Boolean))];
     save(); closeDlg(); render(); toast('Perfil salvo ♡');
   };
@@ -540,6 +684,47 @@ function welcomeDialog() {
   d.addEventListener('close', function f() { d.removeEventListener('close', f); if (!p.welcomed) done(); render(); });
   $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, photo: st.photo, welcomed: true }); save(); closeDlg(); toast('Que lindo! ♡'); };
   $('#wn', d).focus();
+}
+
+/* ---------- publicar, criar, bloquear ---------- */
+function composeDialog(kind = 'note') {
+  let k = kind;
+  const d = openDlg(`<form id="cf"><h2>Nova publicação</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Só você vê ♡</p>
+    <div class="tabs" role="tablist" style="margin:16px 0 4px"><button type="button" role="tab" data-k="note" aria-selected="true">Nota</button><button type="button" role="tab" data-k="quote" aria-selected="false">Citação</button></div>
+    <label for="ct" id="ctl">O que você está pensando ou lendo?</label><textarea id="ct" maxlength="600" style="min-height:110px" required></textarea>
+    <label for="cbk">Sobre qual livro? (opcional)</label><select id="cbk"><option value="">Nenhum</option>${db.books.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</select>
+    <div class="actions"><button class="btn" type="submit">Publicar</button><button class="btn ghost" type="button" id="cx">Cancelar</button></div></form>`);
+  const sync = () => { d.querySelectorAll('[data-k]').forEach(t => t.setAttribute('aria-selected', t.dataset.k === k)); $('#ctl', d).textContent = k === 'quote' ? 'A frase que você quer guardar' : 'O que você está pensando ou lendo?'; };
+  d.querySelectorAll('[data-k]').forEach(t => t.onclick = () => { k = t.dataset.k; sync(); }); sync();
+  $('#cx', d).onclick = closeDlg; $('#ct', d).focus();
+  $('#cf', d).onsubmit = e => {
+    e.preventDefault(); const text = $('#ct', d).value.trim(); if (!text) return;
+    db.posts.push({ id: uid(), kind: k, bookId: $('#cbk', d).value, text, ts: Date.now() });
+    save(); closeDlg(); if (location.hash !== '#/') location.hash = '#/'; else render(); toast('Publicado ♡');
+  };
+}
+function createDialog() {
+  const d = openDlg(`<h2>Criar</h2><div class="stack" style="margin-top:16px;gap:10px"><button class="btn" id="cpost">Nova publicação</button><button class="btn ghost" id="cbook">Novo livro na estante</button><button class="btn ghost" id="cx">Cancelar</button></div>`);
+  $('#cpost', d).onclick = () => { closeDlg(); composeDialog(); };
+  $('#cbook', d).onclick = () => { closeDlg(); bookDialog(); };
+  $('#cx', d).onclick = closeDlg;
+}
+async function hashPin(pin) {
+  try { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lg:' + pin)); return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  catch { let h = 5381; for (const c of 'lg:' + pin) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return 'x' + h; }
+}
+function showLock() {
+  locked = true; $('#app').innerHTML = ''; document.getElementById('lock')?.remove();
+  const el = document.createElement('div'); el.id = 'lock'; el.className = 'lock dots';
+  el.innerHTML = `<div class="lockin"><div class="lframe">${avatar('lg')}</div><h2>${esc(db.profile.name || 'Livros da Giovanna')}</h2><p>Este espaço é privado ♡</p>
+    <form id="lf"><input id="lpin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Digite seu PIN" aria-label="PIN"><button class="btn" type="submit">Entrar</button></form><p class="lerr" id="lerr" role="alert"></p></div>`;
+  document.body.appendChild(el);
+  $('#lpin', el).focus();
+  $('#lf', el).onsubmit = async e => {
+    e.preventDefault();
+    if (await hashPin($('#lpin', el).value) === db.profile.pin) { el.remove(); locked = false; unlocked = true; render(); if (!db.profile.welcomed) welcomeDialog(); }
+    else { $('#lerr', el).textContent = 'PIN incorreto'; $('#lpin', el).value = ''; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+  };
 }
 
 /* ---------- confirmação própria (substitui confirm()) ---------- */
@@ -580,10 +765,36 @@ function importDialog() {
 }
 
 /* ---------- events ---------- */
+function bindSocial(app) {
+  const by = (sel, k) => app.querySelector(`${sel}[data-cbox="${CSS.escape(k)}"]`);
+  app.querySelectorAll('[data-like]').forEach(b => b.onclick = () => { const s = soc(b.dataset.like); s.liked = !s.liked; save(); b.setAttribute('aria-pressed', s.liked); b.querySelector('span').textContent = s.liked ? 'Curtido' : ''; });
+  app.querySelectorAll('[data-save]').forEach(b => b.onclick = () => { const s = soc(b.dataset.save); s.saved = !s.saved; save(); b.setAttribute('aria-pressed', s.saved); toast(s.saved ? 'Salvo ♡' : 'Removido dos salvos'); });
+  app.querySelectorAll('[data-cmt]').forEach(b => b.onclick = () => { const box = app.querySelector(`[data-cbox="${CSS.escape(b.dataset.cmt)}"]`); box.hidden = !box.hidden; if (!box.hidden) $('input', box).focus(); });
+  app.querySelectorAll('[data-cform]').forEach(f => f.onsubmit = e => {
+    e.preventDefault(); const inp = $('input', f), text = inp.value.trim(); if (!text) return;
+    const k = f.dataset.cform, s = soc(k), c = { id: uid(), text, ts: Date.now() }; s.comments.push(c); save();
+    f.insertAdjacentHTML('beforebegin', cmtHTML(c)); inp.value = '';
+    const n = app.querySelector(`[data-cmt="${CSS.escape(k)}"] .cn`); if (n) n.textContent = s.comments.length;
+  });
+  app.querySelectorAll('[data-sharebtn]').forEach(b => b.onclick = async () => {
+    const t = b.closest('.post').dataset.share;
+    try { await navigator.clipboard.writeText(t); toast('Texto copiado'); } catch { toast('Não consegui copiar'); }
+  });
+  app.querySelectorAll('[data-delpost]').forEach(b => b.onclick = async () => {
+    if (!await askConfirm('Apagar esta publicação?', 'Apagar')) return;
+    db.posts = db.posts.filter(p => p.id !== b.dataset.delpost); save(); render();
+  });
+  const n1 = $('#composer', app), n2 = $('#newpost', app), n3 = $('#newbtn', app), lk = $('#lockbtn', app);
+  if (n1) n1.onclick = () => composeDialog(); if (n2) n2.onclick = () => composeDialog(); if (n3) n3.onclick = createDialog;
+  if (lk) lk.onclick = () => { if (db.profile.pin) showLock(); else { toast('Defina um PIN em Editar perfil para bloquear'); } };
+  app.querySelectorAll('[data-ptab]').forEach(t => t.onclick = () => { profTab = t.dataset.ptab; render(); });
+}
+
 function bind() {
   const app = $('#app');
   app.querySelectorAll('[data-year]').forEach(b => b.onclick = () => { if (b.disabled) return; year += Number(b.dataset.year); render(); });
-  app.querySelectorAll('[data-goyear]').forEach(r => r.onclick = () => { year = Number(r.dataset.goyear); location.hash = '#/'; });
+  app.querySelectorAll('[data-goyear]').forEach(r => r.onclick = () => { year = Number(r.dataset.goyear); location.hash = '#/estante'; });
+  bindSocial(app);
   app.querySelectorAll('[data-zoom]').forEach(x => x.onclick = () => zoomBook(x.dataset.zoom));
   initCarousels(app);
   const on = (id, fn) => { const el = $(id, app); if (el) el.onclick = fn; };
@@ -595,6 +806,13 @@ function bind() {
   const qp = $('#quickph', app);
   if (qp) qp.onchange = async e => { const f = e.target.files[0]; if (!f) return; try { db.profile.photo = await fileToCover(f, 320, 320); save(); render(); toast('Foto atualizada ♡'); } catch { toast('Não consegui abrir essa imagem'); } };
   on('#start', () => { const b = getBook(id); b.status = 'reading'; b.startedAt = b.startedAt || today(); save(); render(); });
+  on('#rmsamples', async () => {
+    if (!await askConfirm('Remover os livros de exemplo e as publicações de exemplo? O que você criou continua.', 'Remover')) return;
+    const gone = db.books.filter(b => b.sample).map(b => b.id);
+    db.books = db.books.filter(b => !b.sample); db.profile.favorites = db.profile.favorites.filter(f => !gone.includes(f));
+    db.posts = db.posts.filter(p => !p.sample); db.postsSeeded = true;
+    save(); render(); toast('Exemplos removidos');
+  });
   on('#exp', exportDialog);
   on('#imp', importDialog);
   const lf = $('#logf', app);
@@ -611,18 +829,21 @@ function bind() {
 }
 
 function render() {
-  const h = location.hash;
-  let m;
-  const app = $('#app');
-  if (h === '#/perfil') app.innerHTML = profileView();
-  else if ((m = h.match(/^#\/livro\/(.+)$/))) app.innerHTML = bookView(m[1]);
-  else app.innerHTML = home();
+  if (locked) return;
+  const h = location.hash; let m, html, tab = 'home';
+  if (h === '#/perfil') { html = profileView(); tab = 'me'; }
+  else if (h === '#/estante') { html = libraryView(); tab = 'lib'; }
+  else if (h === '#/salvos') { html = savedView(); tab = 'saved'; }
+  else if ((m = h.match(/^#\/livro\/(.+)$/))) { html = bookView(m[1]); tab = 'lib'; }
+  else html = feedView();
+  $('#app').innerHTML = html + navHTML(tab);
   bind();
 }
 let lastHash = null;
 addEventListener('hashchange', () => { render(); if (location.hash !== lastHash) scrollTo(0, 0); lastHash = location.hash; });
 seed();
+seedPosts();
 applySampleArt();
-render();
+if (db.profile.pin) showLock(); else render();
 findAllCovers();
-if (!db.profile.welcomed) welcomeDialog();
+if (!db.profile.welcomed && !locked) welcomeDialog();
