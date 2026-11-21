@@ -25,9 +25,12 @@ const pct = b => b.pages ? Math.min(100, Math.round(lastPage(b) / b.pages * 100)
 const bookYear = b => Number((b.status === 'read' ? (b.finishedAt || b.addedAt) : (b.startedAt || b.addedAt)).slice(0, 4));
 const avg = list => { const r = list.filter(b => b.rating > 0); return r.length ? (r.reduce((s, b) => s + b.rating, 0) / r.length) : 0; };
 const stars = (r, cls = '') => `<span class="stars ${cls}" role="img" aria-label="${r} de 5 estrelas">${[0,1,2,3,4].map(i => `<i style="--f:${Math.max(0, Math.min(1, r - i)) * 100}%">★</i>`).join('')}</span>`;
-const avatar = (cls = '') => db.profile.photo
-  ? `<span class="avatar ${cls}"><img src="${db.profile.photo}" alt=""></span>`
-  : `<span class="avatar ${cls}">${esc((db.profile.name || 'L').trim()[0].toUpperCase())}</span>`;
+const avatarFrom = (st, name, cls = '') => st.photo
+  ? `<span class="avatar ${cls}"><img src="${st.photo}" alt=""></span>`
+  : (st.mascot && MASCOTS[st.mascot])
+    ? `<span class="avatar mascot ${cls}" style="background:${BG[st.bg || 0] || BG[0]}">${mascotSvg(st.mascot)}</span>`
+    : `<span class="avatar ${cls}">${esc((name || 'L').trim()[0].toUpperCase())}</span>`;
+const avatar = (cls = '') => avatarFrom(db.profile, db.profile.name, cls);
 
 /* ---------- sample data ---------- */
 const SAMPLE = [
@@ -84,7 +87,8 @@ function seed() {
     const by = t => db.books.find(b => b.title === t)?.id;
     db.profile.favorites = ['Torto Arado', 'O Pequeno Príncipe', '1984', 'Dom Casmurro'].map(by).filter(Boolean);
   }
-  db.profile.name = db.profile.name || "Giovanna"; db.seeded = true; save();
+  Object.assign(db.profile, { name: db.profile.name || "Giovanna", mascot: db.profile.mascot || "bunny", bg: db.profile.bg || 0, stickers: db.profile.stickers || ["♡", "✿", "☁", "✦"], goal: db.profile.goal || 12 });
+  db.seeded = true; save();
 }
 
 /* ---------- covers ---------- */
@@ -104,17 +108,65 @@ async function findCover(b) {
   } catch { /* sem internet: tenta de novo na próxima abertura */ }
 }
 async function findAllCovers() { for (const b of [...db.books]) await findCover(b); }
-function fileToCover(file) {
+function fileToCover(file, W = 360, H = 540) {
   return new Promise((ok, no) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
-      const W = 360, H = 540, c = document.createElement('canvas'); c.width = W; c.height = H;
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
       const s = Math.max(W / img.width, H / img.height), w = img.width * s, h = img.height * s;
       c.getContext('2d').drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
       URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', .85));
     };
     img.onerror = no; img.src = url;
   });
+}
+
+/* ---------- bichinhos e símbolos ---------- */
+const BG = ['#ede4ff', '#dccbff', '#ffe3f0', '#dff1ff', '#fff1cf', '#dff7e8'];
+const GLYPHS = ['♡', '✿', '☁', '☾', '✦', '★', '❀', '♪', '✧', '❥', '☼', '✩'];
+const EYES = '<circle cx="37" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="63" cy="56" r="4.6" fill="#2b1d3a"/><circle cx="38.7" cy="54.3" r="1.5" fill="#fff"/><circle cx="64.7" cy="54.3" r="1.5" fill="#fff"/>';
+const CHEEK = '<ellipse cx="27" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/><ellipse cx="73" cy="66" rx="6" ry="4" fill="#ff9fc4" opacity=".75"/>';
+const MOUTH = '<ellipse cx="50" cy="62" rx="2.6" ry="1.9" fill="#2b1d3a"/><path d="M45 66 q5 5 10 0" stroke="#2b1d3a" stroke-width="2" fill="none" stroke-linecap="round"/>';
+const ST = 'stroke="rgba(70,40,120,.2)" stroke-width="1.5"';
+const head = c => `<ellipse cx="50" cy="60" rx="33" ry="29" fill="${c}" ${ST}/>`;
+const MASCOTS = {
+  bunny: { label: 'Coelhinho', svg: `<ellipse cx="35" cy="22" rx="9.5" ry="22" fill="#fff" ${ST}/><ellipse cx="65" cy="22" rx="9.5" ry="22" fill="#fff" ${ST}/><ellipse cx="35" cy="25" rx="4.5" ry="14" fill="#ffc6dd"/><ellipse cx="65" cy="25" rx="4.5" ry="14" fill="#ffc6dd"/>${head('#fff')}${EYES}${CHEEK}${MOUTH}` },
+  cat: { label: 'Gatinho', svg: `<polygon points="22,44 24,12 46,34" fill="#ffd9a8" ${ST}/><polygon points="78,44 76,12 54,34" fill="#ffd9a8" ${ST}/><polygon points="27,38 28,20 40,32" fill="#ffb3cf"/><polygon points="73,38 72,20 60,32" fill="#ffb3cf"/>${head('#ffd9a8')}<path d="M13 60 h14 M13 68 l13 -3 M87 60 h-14 M87 68 l-13 -3" stroke="#b98a5e" stroke-width="1.6" stroke-linecap="round"/>${EYES}${CHEEK}${MOUTH}` },
+  bear: { label: 'Ursinho', svg: `<circle cx="26" cy="33" r="11" fill="#d8a778" ${ST}/><circle cx="74" cy="33" r="11" fill="#d8a778" ${ST}/><circle cx="26" cy="33" r="5.5" fill="#f2cba5"/><circle cx="74" cy="33" r="5.5" fill="#f2cba5"/>${head('#d8a778')}<ellipse cx="50" cy="68" rx="14" ry="10" fill="#f6d9ba"/>${EYES}${CHEEK}${MOUTH}` },
+  panda: { label: 'Pandinha', svg: `<circle cx="26" cy="33" r="11" fill="#2b1d3a"/><circle cx="74" cy="33" r="11" fill="#2b1d3a"/>${head('#fff')}<ellipse cx="36" cy="57" rx="8" ry="9.5" transform="rotate(-18 36 57)" fill="#2b1d3a"/><ellipse cx="64" cy="57" rx="8" ry="9.5" transform="rotate(18 64 57)" fill="#2b1d3a"/><circle cx="37" cy="56" r="3" fill="#fff"/><circle cx="63" cy="56" r="3" fill="#fff"/><circle cx="37.8" cy="55.2" r="1.2" fill="#2b1d3a"/><circle cx="63.8" cy="55.2" r="1.2" fill="#2b1d3a"/>${CHEEK}${MOUTH}` },
+  frog: { label: 'Sapinho', svg: `${head('#9be29f')}<circle cx="30" cy="34" r="13" fill="#9be29f" ${ST}/><circle cx="70" cy="34" r="13" fill="#9be29f" ${ST}/><circle cx="30" cy="34" r="8" fill="#fff"/><circle cx="70" cy="34" r="8" fill="#fff"/><circle cx="31" cy="35" r="4" fill="#2b1d3a"/><circle cx="71" cy="35" r="4" fill="#2b1d3a"/><circle cx="32.2" cy="33.6" r="1.3" fill="#fff"/><circle cx="72.2" cy="33.6" r="1.3" fill="#fff"/>${CHEEK}<path d="M34 64 q16 14 32 0" stroke="#2b1d3a" stroke-width="2.2" fill="none" stroke-linecap="round"/>` },
+  duck: { label: 'Patinho', svg: `<path d="M46 32 q4 -14 11 -3 q-2 5 -5 5 z" fill="#ffe27a" ${ST}/>${head('#ffe27a')}${EYES}${CHEEK}<ellipse cx="50" cy="66" rx="12" ry="6.5" fill="#ffab5e"/><path d="M42 66 h16" stroke="#e8893a" stroke-width="1.4" stroke-linecap="round"/>` },
+  fox: { label: 'Raposinha', svg: `<polygon points="20,46 22,12 46,32" fill="#ffa862" ${ST}/><polygon points="80,46 78,12 54,32" fill="#ffa862" ${ST}/><polygon points="26,38 27,22 38,32" fill="#fff0e0"/><polygon points="74,38 73,22 62,32" fill="#fff0e0"/>${head('#ffa862')}<path d="M17 62 q16 4 33 26 q17 -22 33 -26 q-6 22 -33 28 q-27 -6 -33 -28z" fill="#fff"/><ellipse cx="50" cy="76" rx="3.8" ry="2.7" fill="#2b1d3a"/>${EYES}<ellipse cx="25" cy="63" rx="4" ry="3" fill="#ff9fc4" opacity=".6"/><ellipse cx="75" cy="63" rx="4" ry="3" fill="#ff9fc4" opacity=".6"/>` },
+  hamster: { label: 'Hamster', svg: `<circle cx="27" cy="36" r="9" fill="#ffb7c9" ${ST}/><circle cx="73" cy="36" r="9" fill="#ffb7c9" ${ST}/><circle cx="27" cy="36" r="4.5" fill="#ffe0e8"/><circle cx="73" cy="36" r="4.5" fill="#ffe0e8"/>${head('#ffdcb8')}<ellipse cx="50" cy="70" rx="22" ry="14" fill="#fff3e3"/>${EYES}${CHEEK}${MOUTH}<rect x="47" y="67.5" width="6" height="6" rx="1.5" fill="#fff" stroke="#e8c9a8"/>` }
+};
+const mascotSvg = k => MASCOTS[k] ? `<svg viewBox="0 0 100 100" aria-hidden="true">${MASCOTS[k].svg}</svg>` : '';
+const decor = () => (db.profile.stickers || []).slice(0, 4).map((g, i) => `<span class="deco d${i}" aria-hidden="true">${esc(g)}</span>`).join('');
+function companion(read, reading, goal) {
+  const p = db.profile; if (!p.mascot || !MASCOTS[p.mascot]) return '';
+  const n = (p.name || '').trim().split(' ')[0];
+  const msg = goal && read.length >= goal ? 'Meta batida! Que orgulho de você ♡' : reading[0] ? `Vamos continuar “${esc(reading[0].title)}”?` : read.length ? 'Que tal um livro novo? ✿' : 'Vamos começar uma leitura? ✿';
+  return `<div class="companion"><div class="bubble"><b>Oi${n ? ', ' + esc(n) : ''}!</b> ${msg}</div><span class="avatar mascot" style="background:${BG[p.bg || 0] || BG[0]}">${mascotSvg(p.mascot)}</span></div>`;
+}
+function pickerHTML(st, withPhoto) {
+  return `<div class="pk-prev"><span id="pkprev"></span>${withPhoto ? `<div><button class="btn ghost sm" type="button" id="pickph">Usar uma foto</button> <button class="link" type="button" id="rmph">remover foto</button><input type="file" id="phf" accept="image/*" hidden></div>` : ''}</div>
+    <label>Escolha seu bichinho</label><div class="pk-grid" role="radiogroup" aria-label="Bichinho">${Object.entries(MASCOTS).map(([k, m]) => `<button type="button" class="pk" role="radio" aria-checked="false" aria-label="${m.label}" title="${m.label}" data-m="${k}">${mascotSvg(k)}</button>`).join('')}</div>
+    <label>Cor de fundo</label><div class="pk-bg" role="radiogroup" aria-label="Cor de fundo">${BG.map((c, i) => `<button type="button" class="sw" role="radio" aria-checked="false" aria-label="Cor ${i + 1}" data-bg="${i}" style="background:${c}"></button>`).join('')}</div>`;
+}
+function wirePicker(d, st, nameEl) {
+  const show = () => {
+    $('#pkprev', d).innerHTML = avatarFrom(st, nameEl ? nameEl.value : '', 'lg');
+    d.querySelectorAll('.pk').forEach(b => b.setAttribute('aria-checked', b.dataset.m === st.mascot));
+    d.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-checked', Number(b.dataset.bg) === st.bg));
+  };
+  d.querySelectorAll('.pk').forEach(b => b.onclick = () => { st.mascot = b.dataset.m; st.photo = ''; show(); });
+  d.querySelectorAll('.sw').forEach(b => b.onclick = () => { st.bg = Number(b.dataset.bg); show(); });
+  if ($('#pickph', d)) {
+    $('#pickph', d).onclick = () => $('#phf', d).click();
+    $('#rmph', d).onclick = () => { st.photo = ''; show(); };
+    $('#phf', d).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { st.photo = await fileToCover(f, 320, 320); show(); } catch { toast('Não consegui abrir essa imagem'); } };
+  }
+  if (nameEl) nameEl.addEventListener('input', show);
+  show();
 }
 
 /* ---------- views ---------- */
@@ -151,9 +203,10 @@ function home() {
   const read = db.books.filter(b => b.status === 'read' && bookYear(b) === year).sort((a, b) => (b.finishedAt || '').localeCompare(a.finishedAt || ''));
   const want = db.books.filter(b => b.status === 'want');
   const pages = read.reduce((s, b) => s + (b.pages || 0), 0);
-  const a = avg(read);
+  const a = avg(read), goal = Number(db.profile.goal) || 0;
   return `${header()}<main class="view">
     <section class="hero-card">
+      ${decor()}${companion(read, reading, goal)}
       <div class="year">
         <button class="arrow" data-year="-1" aria-label="Ano anterior" ${year <= min ? 'disabled style="opacity:.3;cursor:default"' : ''}>‹</button>
         <span class="y">${year}</span>
@@ -165,12 +218,13 @@ function home() {
         <div class="stat"><b>${pages.toLocaleString('pt-BR')}</b><span>páginas</span></div>
         <div class="stat"><b>${a ? fmtR(a.toFixed(1)) : '—'}</b><span>nota média</span></div>
       </div>
+      ${goal ? `<div class="goal"><div class="gt"><span>♡ Meta de ${year}</span><b>${read.length} de ${goal} ${goal === 1 ? 'livro' : 'livros'}${read.length >= goal ? ' ✦' : ''}</b></div><div class="gbar"><i style="width:${Math.min(100, read.length / goal * 100)}%"></i></div></div>` : ''}
     </section>
 
     ${reading.length ? `<section class="sec"><h2 class="sh">Lendo agora</h2>${carousel(reading, b => slide(b, metaReading(b)), 'Lendo agora')}</section>` : ''}
 
     <section class="sec"><h2 class="sh">Lidos em ${year}</h2>
-      ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda.</div>`}</section>
+      ${read.length ? carousel(read, b => slide(b, metaRead(b)), 'Lidos em ' + year) : `<div class="empty">Nenhuma leitura concluída em ${year} ainda ♡</div>`}</section>
 
     ${want.length ? `<section class="sec"><h2 class="sh">Para ler</h2>${carousel(want, b => slide(b), 'Para ler')}</section>` : ''}
   </main>`;
@@ -219,7 +273,7 @@ function profileView() {
   const mx = Math.max(1, ...Object.values(byYear));
   const a = avg(read);
   return `${header()}<a class="back" href="#/">← Voltar</a><main class="view">
-    <section class="card" style="padding:0;overflow:hidden"><div class="banner"></div><div class="pcard">
+    <section class="card" style="padding:0;overflow:hidden"><div class="banner">${decor()}</div><div class="pcard">
       <div class="hero">${avatar('lg')}<div class="who"><h1>${esc(p.name || 'Seu nome')}</h1>${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}</div>
       <button class="btn ghost sm" id="editp">Editar perfil</button></div></div></section>
 
@@ -380,38 +434,43 @@ function finishDialog(id) {
 }
 
 function profileDialog() {
-  const p = db.profile; let photo = p.photo;
+  const p = db.profile, st = { mascot: p.mascot || '', bg: p.bg || 0, photo: p.photo || '' };
+  let stickers = [...(p.stickers || [])];
   const opts = sel => `<option value="">—</option>` + db.books.map(b => `<option value="${b.id}" ${b.id === sel ? 'selected' : ''}>${esc(b.title)}</option>`).join('');
-  const d = openDlg(`<form id="pf"><h2>Seu perfil</h2>
-    <div class="photo"><span id="ph"></span><div><button class="btn ghost" type="button" id="pickph">Escolher foto</button> <button class="link" type="button" id="rmph">remover</button><input type="file" id="phf" accept="image/*" hidden></div></div>
-    <label for="pn">Nome</label><input id="pn" type="text" value="${esc(p.name)}" autocomplete="off">
+  const d = openDlg(`<form id="pf"><h2>Seu perfil ✿</h2>
+    <label for="pn">Como você quer ser chamada?</label><input id="pn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
+    ${pickerHTML(st, true)}
+    <label>Símbolos fofinhos <span style="font-weight:400">(até 4, enfeitam seu perfil)</span></label><div class="gl-grid">${GLYPHS.map(g => `<button type="button" class="gl" aria-pressed="false" data-g="${g}">${g}</button>`).join('')}</div>
+    <div class="two"><div><label for="pg">Meta de livros no ano</label><input id="pg" type="number" min="0" max="999" inputmode="numeric" value="${p.goal || ''}" placeholder="Ex.: 12"></div><div></div></div>
     <label for="pb">Sobre você</label><textarea id="pb" style="min-height:64px" placeholder="Uma frase sobre suas leituras">${esc(p.bio)}</textarea>
     <label>Top livros favoritos</label>
-    ${[0,1,2,3,4].map(i => `<select class="fv" style="margin-bottom:4px" aria-label="Favorito ${i + 1}">${opts((p.favorites || [])[i])}</select>`).join('')}
-    ${db.books.length ? '' : '<p class="muted" style="font-size:12px">Adicione livros à sua biblioteca para escolhê-los aqui.</p>'}
+    ${[0,1,2,3,4].map(i => `<select class="fv" style="margin-bottom:6px" aria-label="Favorito ${i + 1}">${opts((p.favorites || [])[i])}</select>`).join('')}
+    ${db.books.length ? '' : '<p class="muted" style="font-size:12px">Adicione livros para escolhê-los aqui.</p>'}
     <div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="cx">Cancelar</button></div></form>`);
-  const showPh = () => { $('#ph', d).innerHTML = photo ? `<span class="avatar lg"><img src="${photo}" alt=""></span>` : `<span class="avatar lg">${esc(($('#pn', d).value || 'L').trim()[0]?.toUpperCase() || 'L')}</span>`; };
-  showPh();
-  $('#pickph', d).onclick = () => $('#phf', d).click();
-  $('#rmph', d).onclick = () => { photo = ''; showPh(); };
-  $('#phf', d).onchange = e => {
-    const f = e.target.files[0]; if (!f) return;
-    const img = new Image(), url = URL.createObjectURL(f);
-    img.onload = () => {
-      const S = 320, c = document.createElement('canvas'); c.width = c.height = S;
-      const m = Math.min(img.width, img.height), sx = (img.width - m) / 2, sy = (img.height - m) / 2;
-      c.getContext('2d').drawImage(img, sx, sy, m, m, 0, 0, S, S);
-      photo = c.toDataURL('image/jpeg', .85); URL.revokeObjectURL(url); showPh();
-    };
-    img.onerror = () => toast('Não consegui abrir essa imagem'); img.src = url;
-  };
+  wirePicker(d, st, $('#pn', d));
+  const syncG = () => d.querySelectorAll('.gl').forEach(b => b.setAttribute('aria-pressed', stickers.includes(b.dataset.g)));
+  d.querySelectorAll('.gl').forEach(b => b.onclick = () => { const g = b.dataset.g; if (stickers.includes(g)) stickers = stickers.filter(x => x !== g); else if (stickers.length < 4) stickers.push(g); else toast('São só 4 símbolos'); syncG(); });
+  syncG();
   $('#cx', d).onclick = closeDlg;
   $('#pf', d).onsubmit = e => {
     e.preventDefault();
-    p.name = $('#pn', d).value.trim(); p.bio = $('#pb', d).value.trim(); p.photo = photo;
+    Object.assign(p, { name: $('#pn', d).value.trim(), bio: $('#pb', d).value.trim(), mascot: st.mascot, bg: st.bg, photo: st.photo, stickers, goal: Number($('#pg', d).value) || 0, welcomed: true });
     p.favorites = [...new Set([...d.querySelectorAll('.fv')].map(s => s.value).filter(Boolean))];
-    save(); closeDlg(); render();
+    save(); closeDlg(); render(); toast('Perfil salvo ♡');
   };
+}
+
+function welcomeDialog() {
+  const p = db.profile, st = { mascot: p.mascot || 'bunny', bg: p.bg || 0, photo: '' };
+  const d = openDlg(`<form id="wf"><h2>Oi! Bem-vinda ♡</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Vamos deixar tudo com a sua cara.</p>
+    <label for="wn">Como você quer ser chamada?</label><input id="wn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
+    ${pickerHTML(st, false)}
+    <div class="actions"><button class="btn" type="submit">Começar ✿</button></div></form>`);
+  wirePicker(d, st, $('#wn', d));
+  const done = () => { Object.assign(p, { welcomed: true }); save(); };
+  d.addEventListener('close', function f() { d.removeEventListener('close', f); if (!p.welcomed) done(); render(); });
+  $('#wf', d).onsubmit = e => { e.preventDefault(); Object.assign(p, { name: $('#wn', d).value.trim() || p.name, mascot: st.mascot, bg: st.bg, welcomed: true }); save(); closeDlg(); toast('Que lindo! ♡'); };
+  $('#wn', d).focus();
 }
 
 /* ---------- confirmação própria (substitui confirm()) ---------- */
@@ -473,7 +532,7 @@ function bind() {
     const b = getBook(id), page = Number($('#lp', app).value) || 0, note = $('#ln', app).value.trim();
     if (!page && !note) { $('#lp', app).focus(); return; }
     b.log = b.log || []; b.log.push({ id: uid(), date: today(), page, note });
-    save(); render(); toast('Registrado');
+    save(); render(); toast('Registrado ♡');
   };
   app.querySelectorAll('[data-del]').forEach(x => x.onclick = () => {
     const b = getBook(id); b.log = b.log.filter(e => e.id !== x.dataset.del); save(); render();
@@ -494,3 +553,4 @@ addEventListener('hashchange', () => { render(); if (location.hash !== lastHash)
 seed();
 render();
 findAllCovers();
+if (!db.profile.welcomed) welcomeDialog();
