@@ -87,7 +87,7 @@ function seed() {
     const by = t => db.books.find(b => b.title === t)?.id;
     db.profile.favorites = ['Torto Arado', 'O Pequeno Príncipe', '1984', 'Dom Casmurro'].map(by).filter(Boolean);
   }
-  Object.assign(db.profile, { name: db.profile.name || "Giovanna", mascot: db.profile.mascot || "bunny", bg: db.profile.bg || 0, stickers: db.profile.stickers || ["♡", "✿", "☁", "✦"], goal: db.profile.goal || 12 });
+  Object.assign(db.profile, { name: db.profile.name || "Giovanna", mascot: db.profile.mascot || "", bg: db.profile.bg || 0, stickers: db.profile.stickers || ["♡", "✿", "☁", "✦"], goal: db.profile.goal || 12 });
   db.seeded = true; save();
 }
 
@@ -149,8 +149,10 @@ function companion(read, reading, goal) {
 }
 function pickerHTML(st, withPhoto) {
   return `<div class="pk-prev"><span id="pkprev"></span>${withPhoto ? `<div><button class="btn sm" type="button" id="pickph">Adicionar minha foto</button> <button class="link" type="button" id="rmph">remover foto</button><input type="file" id="phf" accept="image/*" hidden></div>` : ''}</div>
-    <label>Ou escolha um bichinho (sem foto)</label><div class="pk-grid" role="radiogroup" aria-label="Bichinho">${Object.entries(MASCOTS).map(([k, m]) => `<button type="button" class="pk" role="radio" aria-checked="false" aria-label="${m.label}" title="${m.label}" data-m="${k}">${mascotSvg(k)}</button>`).join('')}</div>
-    <label>Cor de fundo</label><div class="pk-bg" role="radiogroup" aria-label="Cor de fundo">${BG.map((c, i) => `<button type="button" class="sw" role="radio" aria-checked="false" aria-label="Cor ${i + 1}" data-bg="${i}" style="background:${c}"></button>`).join('')}</div>`;
+    <details class="pk-more" ${st.mascot && !st.photo ? 'open' : ''}><summary>Prefere um bichinho no lugar da foto? (opcional)</summary>
+    <div class="pk-grid" role="radiogroup" aria-label="Bichinho">${Object.entries(MASCOTS).map(([k, m]) => `<button type="button" class="pk" role="radio" aria-checked="false" aria-label="${m.label}" title="${m.label}" data-m="${k}">${mascotSvg(k)}</button>`).join('')}</div>
+    <label>Cor de fundo</label><div class="pk-bg" role="radiogroup" aria-label="Cor de fundo">${BG.map((c, i) => `<button type="button" class="sw" role="radio" aria-checked="false" aria-label="Cor ${i + 1}" data-bg="${i}" style="background:${c}"></button>`).join('')}</div>
+    <button class="link" type="button" id="nomasc" style="margin-top:12px">não quero bichinho</button></details>`;
 }
 function wirePicker(d, st, nameEl) {
   const show = () => {
@@ -159,6 +161,7 @@ function wirePicker(d, st, nameEl) {
     d.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-checked', Number(b.dataset.bg) === st.bg));
   };
   d.querySelectorAll('.pk').forEach(b => b.onclick = () => { st.mascot = b.dataset.m; st.photo = ''; show(); });
+  $('#nomasc', d).onclick = () => { st.mascot = ''; show(); };
   d.querySelectorAll('.sw').forEach(b => b.onclick = () => { st.bg = Number(b.dataset.bg); show(); });
   if ($('#pickph', d)) {
     $('#pickph', d).onclick = () => $('#phf', d).click();
@@ -461,7 +464,7 @@ function profileDialog() {
 }
 
 function welcomeDialog() {
-  const p = db.profile, st = { mascot: p.mascot || 'bunny', bg: p.bg || 0, photo: p.photo || '' };
+  const p = db.profile, st = { mascot: p.mascot || '', bg: p.bg || 0, photo: p.photo || '' };
   const d = openDlg(`<form id="wf"><h2>Oi! Bem-vinda ♡</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Vamos deixar tudo com a sua cara.</p>
     <label for="wn">Como você quer ser chamada?</label><input id="wn" type="text" maxlength="40" value="${esc(p.name)}" autocomplete="off" placeholder="Seu nome ou apelido">
     ${pickerHTML(st, true)}

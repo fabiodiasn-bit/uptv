@@ -332,3 +332,11 @@ h2{font-weight:700}
 .avatar-btn input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0}
 .avatar-btn:focus-within{outline:3px solid var(--p400);outline-offset:3px}
 .avatar-btn .cam{position:absolute;right:2px;bottom:4px;width:34px;height:34px;border-radius:50%;background:var(--btn);border:3px solid #fff;display:grid;place-items:center;box-shadow:0 4px 10px rgba(0,0,0,.25);pointer-events:none}
+
+.pk-more{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.pk-more summary{cursor:pointer;font-size:13px;font-weight:500;color:var(--p600);list-style:none}
+.pk-more summary::-webkit-details-marker{display:none}
+.pk-more summary::before{content:"＋ ";}
+.pk-more[open] summary::before{content:"－ ";}
+.pk-more .pk-grid{margin-top:14px}
+.avatar:not(.mascot){background:linear-gradient(135deg,var(--p300),var(--p600))}
