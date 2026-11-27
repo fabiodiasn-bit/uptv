@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Spotimy">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="60" fill="url(#g)"/>
+  <g fill="#fff">
+    <rect x="30" y="62" width="12" height="28" rx="6"/>
+    <rect x="49" y="42" width="12" height="60" rx="6"/>
+    <rect x="68" y="30" width="12" height="84" rx="6" opacity="0" />
+    <rect x="68" y="52" width="12" height="44" rx="6"/>
+    <rect x="87" y="68" width="12" height="20" rx="6"/>
+  </g>
+  <circle cx="93" cy="42" r="9" fill="#fff"/>
+</svg>
