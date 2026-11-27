@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#000000">
-<title>UP Music</title>
+<meta name="theme-color" content="#0b0820">
+<title>Spotimy</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20128%20128%22%20role%3D%22img%22%20aria-label%3D%22Spotimy%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237c3aed%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2306b6d4%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2260%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22%23fff%22%3E%3Crect%20x%3D%2230%22%20y%3D%2262%22%20width%3D%2212%22%20height%3D%2228%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2249%22%20y%3D%2242%22%20width%3D%2212%22%20height%3D%2260%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2268%22%20y%3D%2252%22%20width%3D%2212%22%20height%3D%2244%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2287%22%20y%3D%2268%22%20width%3D%2212%22%20height%3D%2220%22%20rx%3D%226%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2293%22%20cy%3D%2242%22%20r%3D%229%22%20fill%3D%22%23fff%22/%3E%3C/svg%3E">
 <style>
 *{box-sizing:border-box}
-:root{--bg:#000;--panel:#121212;--panel2:#1a1a1a;--hover:#2a2a2a;--line:#2a2a2a;--text:#fff;--muted:#a7a7a7;--accent:#ff1493;--accent2:#ff4db1}
+:root{--bg:#000;--panel:#121212;--panel2:#1a1a1a;--hover:#2a2a2a;--line:#2a2a2a;--text:#fff;--muted:#a7a7a7;--accent:#a78bfa;--accent2:#c4b5fd}
 html,body{margin:0;height:100%;background:#000;color:var(--text);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 svg{width:1em;height:1em;fill:currentColor;display:block}
@@ -16,8 +17,9 @@ input{font:inherit;color:inherit}
 .side{grid-row:1;display:flex;flex-direction:column;gap:8px;min-height:0}
 .box{background:var(--panel);border-radius:10px}
 .nav{padding:8px 12px}
-.logo{display:flex;align-items:center;gap:10px;padding:12px;font-weight:800;font-size:20px;letter-spacing:-.5px}
-.logo i{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:16px;font-style:normal}
+.logo{display:flex;align-items:center;gap:12px;padding:12px;font-weight:800;font-size:26px;letter-spacing:-.5px}
+.logo svg{flex:none}
+.logo span{background:linear-gradient(90deg,#c4b5fd,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
 .nav button{display:flex;align-items:center;gap:16px;width:100%;padding:10px 12px;border-radius:8px;color:var(--muted);font-weight:700;font-size:15px}
 .nav button svg{font-size:24px}
 .nav button:hover,.nav button.on{color:#fff}
@@ -32,7 +34,7 @@ input{font:inherit;color:inherit}
 .pli b{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pli>div{min-width:0}
 .cov{flex:none;border-radius:6px;display:grid;place-items:center;font-weight:800;color:rgba(255,255,255,.85);text-shadow:0 1px 4px rgba(0,0,0,.4)}
-.main{grid-row:1;grid-column:2;overflow:auto;position:relative;background:linear-gradient(180deg,#2a1020 0,var(--panel) 320px);border-radius:10px;scroll-behavior:smooth}
+.main{grid-row:1;grid-column:2;overflow:auto;position:relative;background:linear-gradient(180deg,#1d1540 0,var(--panel) 320px);border-radius:10px;scroll-behavior:smooth}
 .pad{padding:20px 24px 40px}
 h1{font-size:30px;margin:8px 0 18px;letter-spacing:-.5px}
 h2{font-size:22px;margin:30px 0 14px}
@@ -150,7 +152,7 @@ input[type=range]:hover::-moz-range-thumb{width:12px;height:12px;border-radius:5
 <div class="app">
   <aside class="side">
     <div class="box">
-      <div class="logo"><i>♪</i>UP Music</div>
+      <div class="logo"><svg width="44" height="44" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Spotimy"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><circle cx="64" cy="64" r="60" fill="url(#lg)"/><g fill="#fff"><rect x="30" y="62" width="12" height="28" rx="6"/><rect x="49" y="42" width="12" height="60" rx="6"/><rect x="68" y="52" width="12" height="44" rx="6"/><rect x="87" y="68" width="12" height="20" rx="6"/></g><circle cx="93" cy="42" r="9" fill="#fff"/></svg><span>Spotimy</span></div>
       <nav class="nav" id="nav"></nav>
     </div>
     <div class="box lib">
@@ -337,14 +339,14 @@ const synth={
 /* ---------- estado ---------- */
 const S={
  tracks:BUILTIN.slice(),
- playlists:store.get("upm.playlists",[]),
- liked:new Set(store.get("upm.liked",[])),
+ playlists:store.get("spm.playlists",[]),
+ liked:new Set(store.get("spm.liked",[])),
  view:{n:"home"},cur:null,playing:false,pausedAt:0,
  queue:[],qi:-1,orig:[],shuffle:false,repeat:0,
- vol:store.get("upm.vol",.7),muted:false
+ vol:store.get("spm.vol",.7),muted:false
 };
 const T=id=>S.tracks.find(t=>t.id===id);
-const saveUser=()=>{store.set("upm.playlists",S.playlists);store.set("upm.liked",[...S.liked])};
+const saveUser=()=>{store.set("spm.playlists",S.playlists);store.set("spm.liked",[...S.liked])};
 const cover=(t,size)=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,hsl(${t.hue},70%,55%),hsl(${(t.hue+45)%360},65%,28%));font-size:${Math.round(size*.42)}px">${I.note.replace("<svg",'<svg style="width:1em;height:1em;opacity:.85"')}</div>`;
 const mixCover=(h,size,txt)=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,hsl(${h},70%,52%),hsl(${(h+60)%360},65%,25%));font-size:${Math.round(size*.36)}px">${txt||I.note.replace("<svg",'<svg style="width:1em;height:1em;opacity:.85"')}</div>`;
 const likedCover=size=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,#6b2cff,#d8e6ff);font-size:${Math.round(size*.42)}px">${I.heartOn.replace("<svg",'<svg style="width:1em;height:1em;color:#fff"')}</div>`;
@@ -637,7 +639,7 @@ document.addEventListener("keydown",e=>{
 });
 document.addEventListener("input",e=>{
  if(e.target.id==="seek"){dragging=true;setRange(e.target);$("#tc").textContent=fmt(e.target.value/1000*curDur())}
- else if(e.target.id==="vol"){S.vol=e.target.value/100;S.muted=false;applyVol();setRange(e.target);store.set("upm.vol",S.vol);$("#right button").innerHTML=S.vol===0?I.mute:I.vol}
+ else if(e.target.id==="vol"){S.vol=e.target.value/100;S.muted=false;applyVol();setRange(e.target);store.set("spm.vol",S.vol);$("#right button").innerHTML=S.vol===0?I.mute:I.vol}
  else if(e.target.id==="q"){S.view.q=e.target.value;$("#results").innerHTML=resultsHTML(S.view.q)}
 });
 document.addEventListener("change",e=>{
