@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0820">
 <title>Spotimy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Inter:wght@300..600&display=swap">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20128%20128%22%20role%3D%22img%22%20aria-label%3D%22Spotimy%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237c3aed%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2306b6d4%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2260%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22%23fff%22%3E%3Crect%20x%3D%2230%22%20y%3D%2262%22%20width%3D%2212%22%20height%3D%2228%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2249%22%20y%3D%2242%22%20width%3D%2212%22%20height%3D%2260%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2268%22%20y%3D%2252%22%20width%3D%2212%22%20height%3D%2244%22%20rx%3D%226%22/%3E%3Crect%20x%3D%2287%22%20y%3D%2268%22%20width%3D%2212%22%20height%3D%2220%22%20rx%3D%226%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2293%22%20cy%3D%2242%22%20r%3D%229%22%20fill%3D%22%23fff%22/%3E%3C/svg%3E">
 <style>
 *{box-sizing:border-box}
@@ -174,6 +177,130 @@ button.qi:hover{background:#2a2a2a}
   .hero .cov{width:140px;height:140px;font-size:54px}
   .heart{opacity:1}.more{opacity:1}
   .fab{opacity:1;transform:none}
+}
+
+/* ===== tema elegante: tipografia leve, superfícies suaves ===== */
+:root{
+ --bg:#08080c;--panel:#101016;--panel2:#15151d;--hover:#1c1c26;
+ --line:rgba(255,255,255,.07);--text:#f3f3f6;--muted:#9b9bab;
+ --accent:#b8a3ff;--accent2:#d2c6ff;--r:14px;
+ --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ --serif:"Fraunces","Cormorant Garamond",Georgia,"Times New Roman",serif;
+}
+html,body{background:var(--bg);font-family:var(--sans);font-size:15px;font-weight:400;line-height:1.5;letter-spacing:-.003em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+b,strong{font-weight:500}
+::selection{background:rgba(184,163,255,.35)}
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box;border:3px solid transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+h1,h2,h3{font-family:var(--serif);font-weight:400;letter-spacing:-.015em;font-variation-settings:"opsz" 72}
+h1{font-size:clamp(30px,4vw,42px);margin:6px 0 22px;line-height:1.1}
+h2{font-size:24px;margin:38px 0 16px;line-height:1.2}
+h3{font-size:20px}
+
+/* estrutura */
+.app{gap:10px;padding:10px;background:var(--bg)}
+.box,.main{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.main{background:radial-gradient(900px 340px at 18% -8%,rgba(139,92,246,.20),transparent 65%),var(--panel)}
+.pad{padding:26px 30px 48px}
+
+/* logo e navegação */
+.logo{font-family:var(--serif);font-weight:500;font-size:27px;letter-spacing:-.02em;padding:16px 16px 10px;gap:12px}
+.nav{padding:6px 10px 12px}
+.nav button{font-weight:500;font-size:14.5px;padding:10px 12px;border-radius:10px;gap:14px;transition:background .2s,color .2s}
+.nav button:hover{background:rgba(255,255,255,.04)}
+.nav button.on{background:rgba(255,255,255,.07);color:var(--text)}
+.nav button svg{font-size:22px}
+.lib-h{font-weight:500;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:16px 18px 8px}
+.lib-h button{border-radius:10px}
+.pli{border-radius:10px;transition:background .2s}
+.pli b{font-weight:500;font-size:14.5px}
+.pli small{font-size:12.5px}
+
+/* capas e cartões */
+.cov{font-weight:400;border-radius:8px;text-shadow:none}
+.quick{gap:12px}
+.qt{font-weight:500;font-size:14.5px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;transition:background .2s,border-color .2s,transform .2s}
+.qt:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12)}
+.grid{gap:18px}
+.card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:16px;padding:14px;transition:transform .25s ease,background .25s,box-shadow .25s,border-color .25s}
+.card:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);transform:translateY(-3px);box-shadow:0 18px 38px rgba(0,0,0,.45)}
+.card .cov{border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.card b{font-weight:500;font-size:14.5px;letter-spacing:-.005em}
+.card small{font-size:12.5px;line-height:1.4;color:var(--muted)}
+.fab,.big{background:linear-gradient(135deg,#cdbdff,#8f6df5);color:#0b0b12;box-shadow:0 10px 24px rgba(120,80,240,.35)}
+.fab:hover,.big:hover{background:linear-gradient(135deg,#ddd2ff,#a085f7)}
+.gn{font-family:var(--serif);font-weight:500;font-size:22px;letter-spacing:-.01em;border-radius:14px;border:1px solid var(--line);transition:transform .2s,filter .2s}
+.gn:hover{transform:translateY(-2px)}
+
+/* chips */
+.chips{gap:8px}
+.chip{background:transparent;border:1px solid rgba(255,255,255,.16);font-weight:500;font-size:13.5px;padding:7px 15px;transition:background .2s,border-color .2s,color .2s}
+.chip:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.26)}
+.chip.on{background:var(--text);color:#0b0b12;border-color:transparent}
+.chip small{font-weight:400}
+
+/* topo de playlist */
+.hero{padding:28px 30px 0}
+.hero .cov{border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.hero h1{font-size:clamp(34px,6vw,66px);font-weight:400;line-height:1.04;letter-spacing:-.025em;margin:8px 0 12px}
+.hero small{font-weight:500;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.hero p{font-size:14px}
+.bar{padding:22px 30px}
+
+/* tabela de músicas */
+.th{font-size:11px;font-weight:500;letter-spacing:.12em;border-bottom:1px solid var(--line)}
+.row{border-radius:10px;transition:background .15s}
+.row:hover{background:rgba(255,255,255,.05)}
+.t b{font-weight:500;font-size:14.5px;letter-spacing:-.005em}
+.t small{font-size:12.5px}
+.alb,.dur{font-size:13.5px;font-variant-numeric:tabular-nums}
+.row.now .t b,.row.now .num{color:var(--accent)}
+.th .alb,.th .dur{font-size:11px}
+
+/* busca */
+.search{background:rgba(255,255,255,.05);border:1px solid var(--line);height:48px;border-radius:999px;transition:border-color .2s,background .2s}
+.search:focus-within{border-color:rgba(184,163,255,.7);background:rgba(255,255,255,.07)}
+.search input{font-size:15px;font-weight:400}
+.search input::placeholder{color:var(--muted);font-weight:400}
+
+/* player */
+.player{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:0 18px}
+.np b{font-weight:500;font-size:14px}
+.np small{font-size:12px}
+.np .cov{border-radius:8px}
+.prog{font-size:11.5px;font-variant-numeric:tabular-nums}
+.prog span{font-weight:400}
+.play{background:var(--text);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--v),rgba(255,255,255,.16) var(--v))}
+input[type=range]::-moz-range-track{height:3px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--v),rgba(255,255,255,.16) var(--v))}
+input[type=range]:hover::-webkit-slider-runnable-track{background:linear-gradient(90deg,var(--accent2) var(--v),rgba(255,255,255,.22) var(--v))}
+input[type=range]:hover::-moz-range-track{background:linear-gradient(90deg,var(--accent2) var(--v),rgba(255,255,255,.22) var(--v))}
+input[type=range]:hover::-webkit-slider-thumb{margin-top:-4.5px}
+
+/* menus, fila, importação, aviso */
+#menu,#queue,.impbox{background:#16161e;border:1px solid rgba(255,255,255,.09);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+#menu button{border-radius:8px;font-size:14px;font-weight:400}
+#queue h3,.impbox h3{font-size:22px;margin:8px 0 10px}
+#queue .lbl,#menu .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.qi b,.impi b{font-weight:500}
+.impi{border-radius:10px}
+#toast{font-weight:500;font-size:13.5px;border-radius:999px;padding:10px 20px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.empty{font-size:14px}
+.mnav button{font-weight:500;font-size:11px;letter-spacing:.02em}
+
+@media(max-width:860px){
+ .app{gap:0;padding:0}
+ .box,.main{border-radius:0;border:0}
+ .player{border-radius:0;border:0;border-top:1px solid var(--line);background:rgba(10,10,15,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+ .mnav{border-top:1px solid var(--line);background:rgba(8,8,12,.96)}
+ .pad{padding:18px 16px 36px}
+ .hero{padding:20px 16px 0}
+ .bar{padding:18px 16px}
+ h1{font-size:30px}
+ h2{font-size:22px;margin:30px 0 14px}
 }
 </style>
 </head>
@@ -976,7 +1103,7 @@ function viewList(){
  return `<div class="hero" style="background:linear-gradient(180deg,hsla(${l.hue??300},60%,35%,.7),transparent)">${c}<div><small>${l.kind==="user"?"PLAYLIST":l.kind==="liked"?"PLAYLIST":"MIX"}</small><h1>${esc(l.name)}</h1><p>${l.ids.length} músicas${total?" · "+Math.round(total/60)+" min":""}</p></div></div>
  <div class="bar"><button class="big" data-act="playlist" data-id="${esc(l.id)}" aria-label="Tocar">${playing?I.pause:I.play}</button>
   <button class="ib ${S.shuffle?"on":""}" style="${S.shuffle?"color:var(--accent)":""}" data-act="shuffle" aria-label="Aleatório">${I.shuffle}</button>
-  ${l.kind==="user"?`<button class="ib" data-act="rename" data-id="${esc(l.id)}" style="font-size:16px;font-weight:700">Renomear</button><button class="ib" data-act="delpl" data-id="${esc(l.id)}" style="font-size:16px;font-weight:700">Excluir</button>`:""}</div>
+  ${l.kind==="user"?`<button class="ib" data-act="rename" data-id="${esc(l.id)}" style="font-size:15px;font-weight:500">Renomear</button><button class="ib" data-act="delpl" data-id="${esc(l.id)}" style="font-size:15px;font-weight:500">Excluir</button>`:""}</div>
  <div class="pad" style="padding-top:0">${l.loading?`<div class="empty">Carregando…</div>`:listTable(l.ids,l.id)}</div>`;
 }
 function render(){
