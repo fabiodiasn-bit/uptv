@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Organizador Spotify</title>
+<style>
+:root{--bg:#f6f7f5;--fg:#1b1f1c;--mut:#5f6b63;--card:#fff;--line:#d9ded9;--acc:#1a7f45;--accfg:#fff;--warn:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#121513;--fg:#e8ece9;--mut:#9aa69e;--card:#1a1e1b;--line:#2c332e;--acc:#3ddc84;--accfg:#06210f;--warn:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px 16px 48px}
+main{max-width:560px;margin:0 auto;display:grid;gap:16px}
+h1{font-size:1.5rem;margin:0}
+p{margin:0;color:var(--mut)}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px}
+label{font-weight:600;font-size:.9rem}
+input[type=text]{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+button{padding:12px 16px;border:0;border-radius:8px;background:var(--acc);color:var(--accfg);font:inherit;font-weight:700;cursor:pointer}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+code{background:var(--bg);padding:2px 6px;border-radius:6px;word-break:break-all;font-size:.85rem}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+li b{font-variant-numeric:tabular-nums}
+#log{white-space:pre-wrap;font-size:.85rem;color:var(--mut);max-height:200px;overflow:auto}
+.err{color:var(--warn)}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+  <h1>Organizador Spotify</h1>
+  <p>Cria playlists por gênero a partir das suas músicas curtidas. Não apaga nada. Tudo roda no seu navegador.</p>
+
+  <section id="setup">
+    <details>
+      <summary>Primeira vez? Configure o app no Spotify</summary>
+      <p style="margin-top:8px">1. Abra developer.spotify.com/dashboard e crie um app.<br>
+      2. Em Redirect URI, cole o endereço abaixo e salve.<br>
+      3. Copie o Client ID e cole aqui.</p>
+    </details>
+    <div><label>Redirect URI desta página</label><br><code id="redir"></code></div>
+    <div><label for="cid">Client ID</label>
+    <input id="cid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+    <div><label><input id="all" type="checkbox"> Incluir também as músicas das minhas playlists</label></div>
+    <button id="login">Entrar com Spotify</button>
+  </section>
+
+  <section id="plan" hidden>
+    <b id="who"></b>
+    <button id="scan">Analisar biblioteca</button>
+    <ul id="list"></ul>
+    <button id="apply" hidden>Criar essas playlists (privadas)</button>
+    <p id="log"></p>
+  </section>
+</main>
+
+<script>
+const API = "https://api.spotify.com/v1";
+const SCOPES = "user-library-read playlist-read-private playlist-modify-private playlist-modify-public";
+const PREFIX = "Org · ";
+const MIN_TRACKS = 10, FALLBACK = "Outros";
+const BUCKETS = [
+  ["Funk BR",["funk carioca","funk paulista","funk brasileiro","funk ostentacao","funk melody","brazilian funk","baile funk","funk mtg","funk bh"]],
+  ["Sertanejo",["sertanejo","modao","arrocha"]],
+  ["Pagode e Samba",["pagode","samba","axe","roda de samba"]],
+  ["Forró",["forro","piseiro","brega","xote"]],
+  ["MPB e Bossa",["mpb","bossa nova","tropicalia","musica popular brasileira","brazilian"]],
+  ["Gospel",["gospel","worship","christian","louvor"]],
+  ["Rap e Hip-Hop",["hip hop","rap","trap","drill","boom bap"]],
+  ["Metal",["metal","hardcore","grindcore"]],
+  ["Rock",["rock","grunge","punk","hard rock","emo"]],
+  ["Indie e Alternativo",["indie","alternative","shoegaze","dream pop","lo-fi","lofi"]],
+  ["Eletrônica",["edm","house","techno","trance","electro","dubstep","drum and bass","dance","synthwave","electronic"]],
+  ["R&B e Soul",["r&b","soul","neo soul","funk","disco","motown"]],
+  ["Reggae",["reggae","dancehall","ska","dub"]],
+  ["Jazz e Blues",["jazz","blues","swing"]],
+  ["Clássica e Trilhas",["classical","orchestra","soundtrack","score","piano","opera","baroque"]],
+  ["Latina",["reggaeton","latin","salsa","bachata","cumbia","urbano latino","corrido"]],
+  ["Country e Folk",["country","folk","bluegrass","americana","singer-songwriter"]],
+  ["Pop",["pop","k-pop","j-pop","boy band","girl group"]]
+];
+const $ = id => document.getElementById(id);
+const REDIRECT = location.origin + location.pathname;
+let token = null, me = null, plan = null;
+
+$("redir").textContent = REDIRECT;
+try { $("cid").value = localStorage.getItem("cid") || ""; } catch (e) {}
+
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const log = t => { $("log").textContent += t + "\n"; $("log").scrollTop = 1e9; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function login() {
+  const cid = $("cid").value.trim();
+  if (!cid) return alert("Cole o Client ID.");
+  try { localStorage.setItem("cid", cid); } catch (e) {}
+  const verifier = b64(crypto.getRandomValues(new Uint8Array(64)));
+  const challenge = b64(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const state = b64(crypto.getRandomValues(new Uint8Array(16)));
+  sessionStorage.setItem("pkce", JSON.stringify({ verifier, state, cid, all: $("all").checked }));
+  location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({
+    client_id: cid, response_type: "code", redirect_uri: REDIRECT, scope: SCOPES,
+    state, code_challenge_method: "S256", code_challenge: challenge });
+}
+
+async function finishLogin() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has("code") && !q.has("error")) return;
+  const saved = JSON.parse(sessionStorage.getItem("pkce") || "null");
+  history.replaceState(null, "", location.pathname);
+  if (!saved || q.get("state") !== saved.state || !q.get("code")) {
+    return alert("Autorização cancelada ou inválida. Tente entrar de novo.");
+  }
+  const r = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code: q.get("code"),
+      redirect_uri: REDIRECT, client_id: saved.cid, code_verifier: saved.verifier }) });
+  const j = await r.json();
+  if (!j.access_token) return alert("Falha no login: " + (j.error_description || j.error));
+  token = j.access_token;
+  $("all").checked = !!saved.all;
+  sessionStorage.removeItem("pkce");
+  me = await api("GET", "/me");
+  $("setup").hidden = true; $("plan").hidden = false;
+  $("who").textContent = "Conectado como " + (me.display_name || me.id);
+}
+
+async function api(method, path, body) {
+  const url = path.startsWith("http") ? path : API + path;
+  for (let i = 0; i < 5; i++) {
+    const r = await fetch(url, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined });
+    if (r.status === 429) { const w = (+r.headers.get("Retry-After") || 2) + 1; log(`Limite da API, aguardando ${w}s...`); await sleep(w * 1000); continue; }
+    if (r.status >= 500) { await sleep(1000 * 2 ** i); continue; }
+    const text = await r.text();
+    if (!r.ok) throw new Error(`${method} ${path} -> ${r.status} ${text.slice(0, 200)}`);
+    return text ? JSON.parse(text) : {};
+  }
+  throw new Error("Falhou após várias tentativas: " + path);
+}
+
+async function* paged(path) {
+  let page = await api("GET", path + (path.includes("?") ? "&" : "?") + "limit=50");
+  while (true) {
+    for (const it of page.items || []) yield it;
+    if (!page.next) break;
+    page = await api("GET", page.next);
+  }
+}
+
+const trackOf = e => { const t = e && (e.track || e.item || e); return t && t.uri && t.uri.startsWith("spotify:track:") && t.artists ? t : null; };
+
+async function playlistTracks(id) {
+  try { const out = []; for await (const e of paged(`/playlists/${id}/items`)) out.push(e); return out; }
+  catch (e) { const out = []; for await (const x of paged(`/playlists/${id}/tracks`)) out.push(x); return out; }
+}
+
+function bucket(genres) {
+  const score = {};
+  for (let g of genres) {
+    g = g.toLowerCase();
+    const b = BUCKETS.find(([, keys]) => keys.some(k => g.includes(k)));
+    if (b) score[b[0]] = (score[b[0]] || 0) + 1;
+  }
+  const names = Object.keys(score);
+  if (!names.length) return FALLBACK;
+  const order = n => BUCKETS.findIndex(b => b[0] === n);
+  names.sort((a, b) => score[b] - score[a] || order(a) - order(b));
+  return names[0];
+}
+
+async function scan() {
+  $("scan").disabled = true; $("apply").hidden = true; $("list").innerHTML = ""; $("log").textContent = "";
+  try {
+    const tracks = new Map();
+    log("Lendo músicas curtidas...");
+    for await (const e of paged("/me/tracks")) { const t = trackOf(e); if (t) tracks.set(t.uri, t); }
+    if ($("all").checked) {
+      for await (const pl of paged("/me/playlists")) {
+        if (pl.owner.id !== me.id) continue;
+        log("Lendo playlist: " + pl.name);
+        for (const e of await playlistTracks(pl.id)) { const t = trackOf(e); if (t && !tracks.has(t.uri)) tracks.set(t.uri, t); }
+      }
+    }
+    log(`${tracks.size} músicas únicas.`);
+    const ids = [...new Set([...tracks.values()].flatMap(t => t.artists.map(a => a.id).filter(Boolean)))];
+    const genres = {};
+    log(`Buscando gêneros de ${ids.length} artistas...`);
+    for (let i = 0; i < ids.length; i += 50) {
+      const r = await api("GET", "/artists?ids=" + ids.slice(i, i + 50).join(","));
+      for (const a of r.artists || []) if (a) genres[a.id] = a.genres || [];
+    }
+    const groups = {};
+    for (const [uri, t] of tracks) {
+      const gs = t.artists.flatMap(a => genres[a.id] || []);
+      (groups[bucket(gs)] ||= []).push(uri);
+    }
+    for (const n of Object.keys(groups)) {
+      if (n !== FALLBACK && groups[n].length < MIN_TRACKS) { (groups[FALLBACK] ||= []).push(...groups[n]); delete groups[n]; }
+    }
+    plan = Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([n, u]) => [PREFIX + n, u]);
+    for (const [n, u] of plan) { const li = document.createElement("li"); const s = document.createElement("span"); s.textContent = n; const b = document.createElement("b"); b.textContent = u.length; li.append(s, b); $("list").append(li); }
+    $("apply").hidden = !plan.length;
+    log(plan.length ? "Revise o plano e toque em Criar." : "Nenhuma música encontrada.");
+  } catch (e) { log("Erro: " + e.message); $("log").classList.add("err"); }
+  $("scan").disabled = false;
+}
+
+async function apply() {
+  $("apply").disabled = true; $("scan").disabled = true;
+  try {
+    const existing = {};
+    for await (const pl of paged("/me/playlists")) if (pl.owner.id === me.id) existing[pl.name] = pl.id;
+    for (const [name, uris0] of plan) {
+      let id = existing[name], uris = uris0;
+      if (id) {
+        const have = new Set((await playlistTracks(id)).map(e => (trackOf(e) || {}).uri));
+        uris = uris0.filter(u => !have.has(u));
+        log(`Atualizando "${name}": +${uris.length}`);
+      } else {
+        id = (await api("POST", "/me/playlists", { name, public: false, description: "Organizada automaticamente por gênero" })).id;
+        log(`Criada "${name}": ${uris.length} faixas`);
+      }
+      for (let i = 0; i < uris.length; i += 100) {
+        const body = { uris: uris.slice(i, i + 100) };
+        try { await api("POST", `/playlists/${id}/items`, body); } catch (e) { await api("POST", `/playlists/${id}/tracks`, body); }
+      }
+    }
+    log("Concluído. Nenhuma playlist existente foi apagada ou alterada.");
+  } catch (e) { log("Erro: " + e.message); }
+  $("apply").disabled = false; $("scan").disabled = false;
+}
+
+$("login").onclick = login; $("scan").onclick = scan; $("apply").onclick = apply;
+finishLogin().catch(e => alert("Erro: " + e.message));
+</script>
+</body>
+</html>

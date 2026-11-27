@@ -37,3 +37,7 @@ Edite a lista `BUCKETS` no topo de `organize.py` (nome da playlist + palavras-ch
 ## Desfazer
 
 Basta apagar as playlists que começam com `Org · `. Suas músicas curtidas e playlists originais continuam intactas.
+
+## Versão web (celular)
+
+`web/index.html` faz o mesmo no navegador, sem instalar nada. Hospede a pasta `web` em qualquer endereço https (por exemplo GitHub Pages), cadastre esse endereço como Redirect URI no app do Spotify, abra a página no celular, cole o Client ID e toque em Entrar.
