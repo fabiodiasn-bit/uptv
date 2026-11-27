@@ -607,7 +607,7 @@ function viewLibrary(){
  return `<div class="pad"><h1>Sua Biblioteca</h1>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
-   <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar músicas do dispositivo</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar mp3 do dispositivo</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="jamendo">${JMKEY?"Jamendo conectado ✓ (trocar chave)":"Conectar ao Jamendo"}</button>
   </div>
   <div class="grid" style="margin-top:20px">
@@ -654,7 +654,7 @@ function trackMenu(x,y,id,ctxId){
   S.playlists.map(p=>`<button data-act="addto" data-pid="${esc(p.id)}" data-id="${id}">${esc(p.name)}${p.ids.includes(id)?" ✓":""}</button>`).join("")+
   `<button data-act="newpl" data-id="${id}">+ Nova playlist</button><hr>`+
   `<button data-act="like" data-id="${id}">${S.liked.has(id)?"Remover das curtidas":"Curtir"}</button>`+
-  (inUser?`<button data-act="rmfrom" data-pid="${esc(ctxId)}" data-id="${id}">Remover desta playlist</button>`:""));
+  (inUser?`<button data-act="rmfrom" data-pid="${esc(ctxId)}" data-id="${id}">Remover desta playlist</button>`:"")+(T(id)&&T(id).local?`<button data-act="rmlocal" data-id="${id}">Excluir do Spotimy</button>`:""));
 }
 function newPlaylist(addId){
  const name=(prompt("Nome da playlist:","Minha playlist nº "+(S.playlists.length+1))||"").trim();
@@ -664,18 +664,45 @@ function newPlaylist(addId){
  if(!addId)go("pl",{id:p.id});
 }
 
-/* ---------- arquivos locais ---------- */
-$("#file").addEventListener("change",e=>{
- const files=[...e.target.files];let n=0;
- files.forEach((f,i)=>{
-  if(!f.type.startsWith("audio/"))return;
-  const url=URL.createObjectURL(f),t={id:"l"+Date.now()+"_"+i,title:f.name.replace(/\.[^.]+$/,""),artist:"Arquivo local",album:"Meus arquivos",tag:"Local",url,dur:0,hue:Math.floor(Math.random()*360)};
-  S.tracks.push(t);n++;
-  const a=new Audio();a.preload="metadata";a.src=url;a.onloadedmetadata=()=>{t.dur=a.duration;render()};
- });
- e.target.value="";
- if(n){toast(n+(n>1?" músicas adicionadas":" música adicionada")+" (somente nesta sessão)");paintSide();render()}
+/* ---------- arquivos locais (salvos neste navegador via IndexedDB) ---------- */
+const DB={
+ open(){return this.p||(this.p=new Promise((res,rej)=>{const r=indexedDB.open("spotimy",1);r.onupgradeneeded=()=>r.result.createObjectStore("files",{keyPath:"id"});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
+ async tx(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction("files",mode),rq=fn(t.objectStore("files"));t.oncomplete=()=>res(rq&&rq.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+ put(rec){return this.tx("readwrite",s=>s.put(rec))},
+ del(id){return this.tx("readwrite",s=>s.delete(id))},
+ all(){return this.tx("readonly",s=>s.getAll())}
+};
+function addLocal(rec){
+ const url=URL.createObjectURL(rec.blob);
+ const t={id:rec.id,local:true,title:rec.title,artist:rec.artist,album:rec.album,tag:"Local",url,dur:rec.dur||0,hue:rec.hue};
+ S.tracks.push(t);
+ if(!t.dur){const a=new Audio();a.preload="metadata";a.src=url;a.onloadedmetadata=()=>{t.dur=a.duration;rec.dur=a.duration;DB.put(rec).catch(()=>{});render()}}
+ return t;
+}
+$("#file").addEventListener("change",async e=>{
+ const files=[...e.target.files].filter(f=>f.type.startsWith("audio/"));e.target.value="";
+ let n=0,unsaved=0;
+ for(const [i,f] of files.entries()){
+  const base=f.name.replace(/\.[^.]+$/,""),m=base.split(/\s+-\s+/);
+  const rec={id:"l"+Date.now()+"_"+i,title:(m.length>1?m.slice(1).join(" - "):base).trim()||base,artist:m.length>1?m[0].trim():"Arquivo local",album:"Meus arquivos",hue:hueOf(base),dur:0,blob:f};
+  try{await DB.put(rec)}catch(err){unsaved++}
+  addLocal(rec);n++;
+ }
+ if(!n){if(files.length===0)toast("Escolha arquivos de áudio (mp3, m4a, wav...)");return}
+ toast(unsaved?"Adicionadas, mas o navegador não permitiu salvar (valem só nesta sessão)":n+(n>1?" músicas salvas":" música salva")+" neste navegador");
+ paintSide();render();
 });
+async function removeLocal(id){
+ const t=T(id);if(!t||!t.local)return;
+ if(!confirm("Excluir \""+t.title+"\" do Spotimy? O arquivo original no seu aparelho não é apagado."))return;
+ if(S.cur&&S.cur.id===id){engineStop();S.playing=false;S.cur=null;S.pausedAt=0}
+ S.queue=S.queue.filter(x=>x!==id);S.orig=S.orig.filter(x=>x!==id);
+ S.qi=S.cur?S.queue.indexOf(S.cur.id):-1;
+ S.liked.delete(id);S.recent=S.recent.filter(x=>x!==id);S.playlists.forEach(p=>p.ids=p.ids.filter(x=>x!==id));
+ S.tracks=S.tracks.filter(x=>x.id!==id);URL.revokeObjectURL(t.url);
+ try{await DB.del(id)}catch(err){}
+ saveUser();paintAll();render();toast("Música excluída");
+}
 
 /* ---------- eventos ---------- */
 document.addEventListener("click",e=>{
@@ -712,6 +739,7 @@ function handleAct(a,e){
    if(S.view.n==="pl")render();break}
   case"menu":{e.stopPropagation();const r=a.getBoundingClientRect();trackMenu(r.left-200,r.bottom+4,id,a.dataset.ctx);break}
   case"addto":{const p=S.playlists.find(p=>p.id===a.dataset.pid);if(p&&!p.ids.includes(id)){p.ids.push(id);saveUser();paintSide();render();toast("Adicionada a "+p.name)}else toast("Já está nessa playlist");hideMenu();break}
+  case"rmlocal":hideMenu();removeLocal(id);break;
   case"rmfrom":{const p=S.playlists.find(p=>p.id===a.dataset.pid);if(p){p.ids=p.ids.filter(x=>x!==id);saveUser();paintSide();render();toast("Removida da playlist")}hideMenu();break}
   case"newpl":hideMenu();newPlaylist(id);break;
   case"addfiles":$("#file").click();break;
@@ -742,6 +770,8 @@ addEventListener("resize",hideMenu);
 
 /* ---------- boot ---------- */
 paintAll();render();
+DB.all().then(rs=>{let n=0;rs.forEach(r=>{if(!T(r.id)){addLocal(r);n++}});if(n){paintSide();render()}}).catch(()=>{});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 </script>
 </body>
 </html>
