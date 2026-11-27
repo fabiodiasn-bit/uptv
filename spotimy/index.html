@@ -382,15 +382,16 @@ const S={
 };
 const T=id=>S.tracks.find(t=>t.id===id);
 const local=()=>S.tracks.filter(t=>!t.remote);
-const srcOf=t=>t.sp?"sp":t.remote?"jm":"local";
+const srcOf=t=>t.sp?"sp":t.pc?"pc":t.remote?"jm":"local";
 const srcOn=k=>S.srcF==="all"||S.srcF===k;
 function srcChips(){
  const c=(k,l,ok)=>`<button class="chip ${S.srcF===k?"on":""}" data-src="${k}">${l}${ok===false?"<small>conectar</small>":""}</button>`;
- return `<div class="chips">${c("all","Tudo")}${c("local","Meus mp3")}${c("jm","Jamendo",!!JMKEY)}${c("sp","Spotify",spOn())}</div>`;
+ return `<div class="chips">${c("all","Tudo")}${c("local","Meus mp3")}${c("pc","Computador",pcOn())}${c("jm","Jamendo",!!JMKEY)}${c("sp","Spotify",spOn())}</div>`;
 }
 function setSrc(k){
  if(k==="jm"&&!JMKEY){handleAct({dataset:{act:"jamendo"}},{});return}
  if(k==="sp"&&!spOn()){spConnect();return}
+ if(k==="pc"&&!pcOn()){pcConnect();return}
  S.srcF=k;store.set("spm.srcf",k);render();
 }
 const saveUser=()=>{
@@ -408,6 +409,8 @@ function tagList(){return [...new Set(local().map(t=>t.tag))]}
 function hueOf(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
 function getList(id){
  if(id==="liked")return{id,name:"Músicas Curtidas",ids:S.tracks.filter(t=>S.liked.has(t.id)).map(t=>t.id),kind:"liked",desc:"Suas músicas favoritas"};
+ if(id==="pc:all")return{id,name:"Músicas do computador",ids:PC.ids.filter(T),kind:"mix",hue:200};
+ if(id.startsWith("pc:a")){const al=PC.albums[+id.slice(4)];return al?{id,name:al.name,ids:al.ids.filter(T),kind:"mix",hue:hueOf(al.name)}:null}
  if(id.startsWith("src:")){const k=id.slice(4);return{id,name:k==="jm"?"Salvas do Jamendo":"Salvas do Spotify",ids:S.tracks.filter(t=>srcOf(t)===k).map(t=>t.id),kind:"mix",hue:hueOf(k)}}
  if(id.startsWith("sp:")){const ids=S.jmLists[id],m=S.spPls.find(p=>p.id===id);return{id,name:id==="sp:q"?"Busca no Spotify":(m?m.name:"Spotify"),ids:(ids||[]).filter(T),kind:"mix",hue:hueOf(id),loading:!ids}}
  if(id==="recent")return{id,name:"Tocadas recentemente",ids:S.recent.filter(T),kind:"mix",hue:280};
@@ -805,6 +808,77 @@ async function spPlay(t,off){
  }
 }
 
+/* ---------- Computador (servidor do Spotimy: toca direto de uma pasta do PC, sem importar) ---------- */
+const PC={base:"",key:"",ok:false,ids:[],albums:[],n:0};
+const pcOn=()=>PC.ok;
+const canReach=b=>!(location.protocol==="https:"&&/^http:/i.test(b)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(b));
+async function pcLoad(base,key){
+ const r=await fetch(base+"/api/library"+(key?"?k="+encodeURIComponent(key):""));
+ if(r.status===401){const e=new Error("senha");e.status=401;throw e}
+ if(!r.ok)throw new Error("http "+r.status);
+ const j=await r.json();
+ const ex=new Map(S.tracks.filter(t=>t.pc).map(t=>[t.id,t]));
+ const ids=[],groups=new Map();
+ (j.tracks||[]).forEach(x=>{
+  const id="c"+x.id,url=base+"/files/"+x.id+(key?"?k="+encodeURIComponent(key):"");
+  let t=ex.get(id);
+  if(t){t.url=url;t.title=x.title;t.artist=x.artist;t.album=x.album}
+  else{t={id,remote:true,pc:true,title:x.title,artist:x.artist,album:x.album,tag:"Computador",url,dur:0,hue:hueOf(x.album)};S.tracks.push(t)}
+  ids.push(id);
+  if(!groups.has(x.album))groups.set(x.album,[]);
+  groups.get(x.album).push(id);
+ });
+ PC.base=base;PC.key=key;PC.ok=true;PC.ids=ids;PC.n=ids.length;
+ PC.albums=[...groups].map(([name,ids])=>({name,ids}));
+ store.set("spm.pc",{base,key});
+}
+async function pcInit(){
+ const saved=store.get("spm.pc",null);
+ const cands=[];
+ if(window.SPOTIMY_SERVER)cands.push({base:location.origin,key:saved&&saved.base===location.origin?saved.key:""});
+ else if(saved&&canReach(saved.base))cands.push(saved);
+ for(const c of cands){
+  try{await pcLoad(c.base,c.key);break}
+  catch(e){if(e.status===401&&window.SPOTIMY_SERVER)toast("A biblioteca do computador pede senha. Toque em Computador para entrar.")}
+ }
+ render();paintSide();
+}
+async function pcConnect(){
+ if(pcOn()){if(confirm("Desconectar do computador? As músicas saem do app, os arquivos continuam lá."))pcLogout();return}
+ const def=PC.base||(window.SPOTIMY_SERVER?location.origin:"http://");
+ let base=prompt("Endereço do servidor no seu computador.\nExemplo: http://192.168.0.10:8765\n(o endereço aparece na janela do servidor)",def);
+ if(base===null)return;
+ base=base.trim().replace(/\/+$/,"");if(!base)return;
+ if(!/^https?:\/\//i.test(base))base="http://"+base;
+ if(!canReach(base)){alert("Esta página usa https e o navegador bloqueia o endereço "+base+".\n\nAbra o Spotimy pelo endereço do seu computador, o mesmo que o servidor mostra (começa com http://).");return}
+ let key=PC.key||"";
+ for(let tries=0;tries<4;tries++){
+  try{await pcLoad(base,key);toast(PC.n+" músicas do computador");render();paintSide();return}
+  catch(e){
+   if(e.status===401){
+    if(tries===3){toast("Senha incorreta.");return}
+    const k=prompt(tries?"Senha incorreta. Tente de novo:":"Este servidor pede senha:","");if(k===null)return;key=k;continue;
+   }
+   toast("Não consegui falar com o servidor. Confira se ele está rodando, o Wi-Fi e o endereço.");return;
+  }
+ }
+}
+function pcLogout(){
+ PC.ok=false;PC.ids=[];PC.albums=[];PC.n=0;store.set("spm.pc",null);
+ const keep=new Set([...S.liked,...S.playlists.flatMap(p=>p.ids)]);
+ S.tracks=S.tracks.filter(t=>!t.pc||keep.has(t.id)||(S.cur&&S.cur.id===t.id));
+ toast("Computador desconectado");paintAll();render();
+}
+function fillPcHome(){
+ const b=$("#pc-home");if(!b)return;
+ if(!pcOn()){b.innerHTML="";return}
+ b.innerHTML=`<h2>No seu computador</h2><div class="chips"><button class="chip on" data-act="playlist" data-id="pc:all">Tocar tudo (${PC.n})</button></div><div class="grid">${PC.albums.slice(0,24).map((a,i)=>`<div class="card" data-pl="pc:a${i}" role="button" tabindex="0">${mixCover(hueOf(a.name),200)}<button class="fab" data-act="playlist" data-id="pc:a${i}" aria-label="Tocar">${I.play}</button><b>${esc(a.name)}</b><small>${a.ids.length} músicas</small></div>`).join("")}</div>`;
+}
+function pcLibHTML(){
+ const ids=PC.ids.filter(T);
+ return `<h2>Do seu computador</h2>`+(ids.length?`<div class="empty" style="padding:0 0 12px;text-align:left">${ids.length} músicas${ids.length>500?" (mostrando 500; use a busca para achar o resto)":""}</div>`+listTable(ids.slice(0,500),"pc:all"):`<div class="empty">Nenhuma música encontrada no computador.</div>`);
+}
+
 /* ---------- render: lateral / navegação ---------- */
 const NAV=[["home","Início",I.home],["search","Buscar",I.search],["library","Biblioteca",I.lib]];
 function paintNav(){
@@ -851,6 +925,7 @@ function viewHome(){
   ${rec.length?`<h2>Tocadas recentemente</h2><div class="grid">${rec.map(t=>cardT(t,"recent")).join("")}</div>`:""}
   <h2 ${showL?"":"hidden"}>Destaques</h2>
   <div class="grid" ${showL?"":"hidden"}>${recent.map(t=>cardT(t,"all")).join("")}</div>
+  ${srcOn("pc")?`<div id="pc-home"></div>`:""}
   ${srcOn("jm")?`<div id="jm-home"></div>`:""}
   ${srcOn("sp")?`<div id="sp-home"></div>`:""}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:30px">${JMKEY?"":`<button class="qt" style="padding:14px 18px" data-act="jamendo">Conectar ao Jamendo e ouvir milhares de músicas</button>`}${spOn()?"":`<button class="qt" style="padding:14px 18px" data-act="spotify">Conectar ao Spotify (Premium)</button>`}</div>
@@ -865,10 +940,15 @@ function viewSearch(){
 function resultsHTML(q,gen){
  q=q.trim().toLowerCase();
  if(!q)return (srcOn("local")?`<h2>Navegar por todas</h2><div class="genres">${gen||tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("")}</div>`:"")+(srcOn("jm")?jmGenres():"");
- if(!srcOn("local"))return "";
- const ids=local().filter(t=>[t.title,t.artist,t.album,t.tag].some(s=>s.toLowerCase().includes(q))).map(t=>t.id);
- if(!ids.length&&S.srcF==="all"&&(JMKEY||spOn()))return "";
- return `<h2>Músicas</h2>`+(ids.length?listTable(ids,"search:"+q):`<div class="empty">Nenhum resultado para “${esc(q)}”.</div>`);
+ const match=t=>[t.title,t.artist,t.album,t.tag].some(s=>String(s).toLowerCase().includes(q));
+ const lids=srcOn("local")?local().filter(match).map(t=>t.id):[];
+ const pids=srcOn("pc")&&pcOn()?S.tracks.filter(t=>t.pc&&match(t)).map(t=>t.id):[];
+ const others=S.srcF==="all"&&(JMKEY||spOn());
+ let out="";
+ if(srcOn("local")&&(lids.length||!(others||pids.length)))out+=`<h2>Músicas</h2>`+(lids.length?listTable(lids,"search:"+q):`<div class="empty">Nenhum resultado para “${esc(q)}”.</div>`);
+ if(pids.length)out+=`<h2>No seu computador</h2>`+listTable(pids.slice(0,100),"search:"+q);
+ else if(S.srcF==="pc")out+=`<h2>No seu computador</h2><div class="empty">Nenhum resultado para “${esc(q)}”.</div>`;
+ return out;
 }
 function viewLibrary(){
  return `<div class="pad"><h1>Sua Biblioteca</h1>${srcChips()}
@@ -876,6 +956,7 @@ function viewLibrary(){
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Escolher mp3 do dispositivo</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="adddir">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar pasta inteira</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="pc">${pcOn()?`Computador conectado ✓ (${PC.n} músicas)`:"Conectar ao computador"}</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="jamendo">${JMKEY?"Jamendo conectado ✓ (trocar chave)":"Conectar ao Jamendo"}</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="spotify">${spOn()?"Spotify conectado ✓ (desconectar)":"Conectar ao Spotify (Premium)"}</button>${spOn()&&!SP_MOBILE?`
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="spmode">Spotify: ${SP.forceRemote?"controlando o app":"tocando no navegador"}</button>`:""}
@@ -884,7 +965,7 @@ function viewLibrary(){
    <div class="card" data-pl="liked" role="button" tabindex="0">${likedCover(200)}<b>Músicas Curtidas</b><small>${S.liked.size} músicas</small></div>
    ${S.playlists.map(p=>`<div class="card" data-pl="${esc(p.id)}" role="button" tabindex="0">${mixCover(hueOf(p.name),200)}<b>${esc(p.name)}</b><small>Playlist · ${p.ids.filter(T).length} músicas</small></div>`).join("")}
   </div>
-  ${S.srcF==="jm"||S.srcF==="sp"?`<h2>${S.srcF==="jm"?"Salvas do Jamendo":"Salvas do Spotify"}</h2>${listTable(getList("src:"+S.srcF).ids,"src:"+S.srcF)}`:`<h2>Todas as músicas</h2>${listTable(local().map(t=>t.id),"all")}`}</div>`;
+  ${S.srcF==="pc"?pcLibHTML():S.srcF==="jm"||S.srcF==="sp"?`<h2>${S.srcF==="jm"?"Salvas do Jamendo":"Salvas do Spotify"}</h2>${listTable(getList("src:"+S.srcF).ids,"src:"+S.srcF)}`:`<h2>Todas as músicas</h2>${listTable(local().map(t=>t.id),"all")}`}</div>`;
 }
 function viewList(){
  const l=getList(S.view.id);
@@ -899,12 +980,12 @@ function viewList(){
  <div class="pad" style="padding-top:0">${l.loading?`<div class="empty">Carregando…</div>`:listTable(l.ids,l.id)}</div>`;
 }
 function render(){
- if((S.srcF==="jm"&&!JMKEY)||(S.srcF==="sp"&&!spOn()))S.srcF="all";
+ if((S.srcF==="jm"&&!JMKEY)||(S.srcF==="sp"&&!spOn())||(S.srcF==="pc"&&!pcOn()))S.srcF="all";
  const m=$("#main"),sc=m.scrollTop;
  m.innerHTML=S.view.n==="home"?viewHome():S.view.n==="search"?viewSearch():S.view.n==="library"?viewLibrary():viewList();
  m.scrollTop=sc;
  document.querySelectorAll("[data-tid]").forEach(e=>e.classList.toggle("now",!!S.cur&&e.dataset.tid===S.cur.id));
- if(S.view.n==="home"){fillJmHome();fillSpHome()}
+ if(S.view.n==="home"){fillPcHome();fillJmHome();fillSpHome()}
  if(S.view.n==="search"){fillJmSearch(S.view.q||"",0);fillSpSearch(S.view.q||"",0)}
 }
 function go(n,extra={}){S.view=Object.assign({n},extra);$("#main").scrollTop=0;render();if(n==="pl"&&/^(jm|sp):/.test(String(extra.id)))ensureList(extra.id);paintNav();paintSide();if(n==="search")setTimeout(()=>{const q=$("#q");if(q&&!extra.q)q.focus()},0)}
@@ -1049,6 +1130,7 @@ function handleAct(a,e){
   case"rmfrom":{const p=S.playlists.find(p=>p.id===a.dataset.pid);if(p){p.ids=p.ids.filter(x=>x!==id);saveUser();paintSide();render();toast("Removida da playlist")}hideMenu();break}
   case"newpl":hideMenu();newPlaylist(id);break;
   case"addfiles":$("#file").click();break;
+  case"pc":pcConnect();break;
   case"adddir":$("#dir").click();break;
   case"imp-all":imp.forEach(i=>i.checked=true);paintImport();break;
   case"imp-none":imp.forEach(i=>i.checked=false);paintImport();break;
@@ -1082,6 +1164,7 @@ addEventListener("resize",hideMenu);
 
 /* ---------- boot ---------- */
 paintAll();render();
+pcInit();
 spCallback().then(()=>{if(spOn()&&!spRemote())spPlayer().catch(()=>{});render();paintSide()});
 DB.all().then(rs=>{let n=0;rs.forEach(r=>{if(!T(r.id)){addLocal(r);n++}});if(n){paintSide();render()}}).catch(()=>{});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
