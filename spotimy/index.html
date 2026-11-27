@@ -137,6 +137,20 @@ button.qi:hover{background:#2a2a2a}
 .chip:hover{background:rgba(255,255,255,.18)}
 .chip.on{background:#fff;color:#000}
 .chip small{opacity:.65;font-weight:500;margin-left:6px}
+#imp{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:70;padding:16px}
+.impbox{background:#181818;border-radius:12px;width:min(560px,100%);max-height:86vh;display:flex;flex-direction:column;padding:16px}
+.impbox h3{margin:4px 0 12px}
+.impbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.impbar span{color:var(--muted);font-size:14px;margin-left:auto}
+.implist{overflow:auto;flex:1;min-height:120px}
+.impi{display:flex;gap:12px;align-items:center;padding:8px 6px;border-radius:6px;cursor:pointer}
+.impi:hover{background:#2a2a2a}
+.impi input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.impi>div{min-width:0}
+.impi b{display:block;font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.impi small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.impbtn{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.chip[disabled]{opacity:.4;cursor:default}
 .mnav{display:none}
 @media(max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:1fr auto auto;gap:0;padding:0}
@@ -189,7 +203,9 @@ button.qi:hover{background:#2a2a2a}
 <div id="menu"></div>
 <div id="queue"></div>
 <div id="toast"></div>
-<input type="file" id="file" accept="audio/*" multiple hidden>
+<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple hidden>
+<input type="file" id="dir" webkitdirectory multiple hidden>
+<div id="imp"></div>
 
 <script>
 "use strict";
@@ -858,7 +874,8 @@ function viewLibrary(){
  return `<div class="pad"><h1>Sua Biblioteca</h1>${srcChips()}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
-   <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar mp3 do dispositivo</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Escolher mp3 do dispositivo</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="adddir">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar pasta inteira</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="jamendo">${JMKEY?"Jamendo conectado ✓ (trocar chave)":"Conectar ao Jamendo"}</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="spotify">${spOn()?"Spotify conectado ✓ (desconectar)":"Conectar ao Spotify (Premium)"}</button>${spOn()&&!SP_MOBILE?`
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="spmode">Spotify: ${SP.forceRemote?"controlando o app":"tocando no navegador"}</button>`:""}
@@ -933,19 +950,51 @@ function addLocal(rec){
  if(!t.dur){const a=new Audio();a.preload="metadata";a.src=url;a.onloadedmetadata=()=>{t.dur=a.duration;rec.dur=a.duration;DB.put(rec).catch(()=>{});render()}}
  return t;
 }
-$("#file").addEventListener("change",async e=>{
- const files=[...e.target.files].filter(f=>f.type.startsWith("audio/"));e.target.value="";
+const AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)$/i;
+const MIME={mp3:"audio/mpeg",m4a:"audio/mp4",aac:"audio/aac",wav:"audio/wav",ogg:"audio/ogg",oga:"audio/ogg",opus:"audio/ogg",flac:"audio/flac",weba:"audio/webm"};
+const isAudio=f=>(f.type&&f.type.startsWith("audio/"))||AUDIO_EXT.test(f.name);
+function guess(f){
+ const base=f.name.replace(/\.[^.]+$/,""),m=base.split(/\s+-\s+/),parts=(f.webkitRelativePath||"").split("/");
+ return{file:f,size:f.size,title:(m.length>1?m.slice(1).join(" - "):base).trim()||base,artist:m.length>1?m[0].trim():"Arquivo local",album:parts.length>1?parts[parts.length-2]:"Meus arquivos",checked:true};
+}
+let imp=[];
+function openImport(files){
+ const list=[...files].filter(isAudio);
+ if(!list.length){toast("Nenhum arquivo de áudio encontrado");return}
+ if(list.length===1){importItems([guess(list[0])]);return}
+ imp=list.map(guess).sort((x,y)=>x.album.localeCompare(y.album)||x.title.localeCompare(y.title));
+ paintImport();
+}
+function paintImport(){
+ const m=$("#imp");
+ if(!imp.length){m.style.display="none";m.innerHTML="";return}
+ m.style.display="flex";
+ m.innerHTML=`<div class="impbox" role="dialog" aria-label="Importar músicas"><h3>Importar ${imp.length} músicas</h3>
+  <div class="impbar"><button class="chip" data-act="imp-all">Selecionar todos</button><button class="chip" data-act="imp-none">Limpar</button><span id="impn"></span></div>
+  <div class="implist">${imp.map((i,k)=>`<label class="impi"><input type="checkbox" data-k="${k}" ${i.checked?"checked":""}><div><b>${esc(i.title)}</b><small>${esc(i.artist)} · ${esc(i.album)} · ${(i.size/1048576).toFixed(1)} MB</small></div></label>`).join("")}</div>
+  <div class="impbtn"><button class="chip" data-act="imp-cancel">Cancelar</button><button class="chip on" id="impgo" data-act="imp-go"></button></div></div>`;
+ updImp();
+}
+function updImp(){
+ const n=imp.filter(i=>i.checked).length;
+ const a=$("#impn"),g=$("#impgo");if(!a||!g)return;
+ a.textContent=n+" de "+imp.length+" selecionadas";g.textContent="Importar "+n;g.disabled=!n;
+}
+async function importItems(items){
  let n=0,unsaved=0;
- for(const [i,f] of files.entries()){
-  const base=f.name.replace(/\.[^.]+$/,""),m=base.split(/\s+-\s+/);
-  const rec={id:"l"+Date.now()+"_"+i,title:(m.length>1?m.slice(1).join(" - "):base).trim()||base,artist:m.length>1?m[0].trim():"Arquivo local",album:"Meus arquivos",hue:hueOf(base),dur:0,blob:f};
+ for(const [i,it] of items.entries()){
+  const f=it.file,ext=((f.name.match(/\.([^.]+)$/)||[])[1]||"").toLowerCase();
+  const blob=f.type?f:new Blob([f],{type:MIME[ext]||"audio/mpeg"});
+  const rec={id:"l"+Date.now()+"_"+i,title:it.title,artist:it.artist,album:it.album,hue:hueOf(it.title+it.album),dur:0,blob};
   try{await DB.put(rec)}catch(err){unsaved++}
   addLocal(rec);n++;
+  if(items.length>4&&i%4===3)toast("Importando… "+(i+1)+" de "+items.length);
  }
- if(!n){if(files.length===0)toast("Escolha arquivos de áudio (mp3, m4a, wav...)");return}
  toast(unsaved?"Adicionadas, mas o navegador não permitiu salvar (valem só nesta sessão)":n+(n>1?" músicas salvas":" música salva")+" neste navegador");
  paintSide();render();
-});
+}
+$("#file").addEventListener("change",e=>{const f=[...e.target.files];e.target.value="";openImport(f)});
+$("#dir").addEventListener("change",e=>{const f=[...e.target.files];e.target.value="";openImport(f)});
 async function removeLocal(id){
  const t=T(id);if(!t||!t.local)return;
  if(!confirm("Excluir \""+t.title+"\" do Spotimy? O arquivo original no seu aparelho não é apagado."))return;
@@ -1000,6 +1049,11 @@ function handleAct(a,e){
   case"rmfrom":{const p=S.playlists.find(p=>p.id===a.dataset.pid);if(p){p.ids=p.ids.filter(x=>x!==id);saveUser();paintSide();render();toast("Removida da playlist")}hideMenu();break}
   case"newpl":hideMenu();newPlaylist(id);break;
   case"addfiles":$("#file").click();break;
+  case"adddir":$("#dir").click();break;
+  case"imp-all":imp.forEach(i=>i.checked=true);paintImport();break;
+  case"imp-none":imp.forEach(i=>i.checked=false);paintImport();break;
+  case"imp-cancel":imp=[];paintImport();break;
+  case"imp-go":{const sel=imp.filter(i=>i.checked);imp=[];paintImport();if(sel.length)importItems(sel);break}
   case"rename":{const p=S.playlists.find(p=>p.id===id);const n=p&&(prompt("Novo nome:",p.name)||"").trim();if(n){p.name=n.slice(0,60);saveUser();paintSide();render()}break}
   case"delpl":{if(confirm("Excluir esta playlist?")){S.playlists=S.playlists.filter(p=>p.id!==id);saveUser();go("library")}break}
  }
@@ -1020,6 +1074,7 @@ document.addEventListener("input",e=>{
  else if(e.target.id==="q"){S.view.q=e.target.value;$("#results").innerHTML=resultsHTML(S.view.q);fillJmSearch(S.view.q,450);fillSpSearch(S.view.q,450)}
 });
 document.addEventListener("change",e=>{
+ if(e.target.dataset&&e.target.dataset.k!==undefined&&imp[+e.target.dataset.k]){imp[+e.target.dataset.k].checked=e.target.checked;updImp();return}
  if(e.target.id==="seek"){seekTo(e.target.value/1000*curDur());dragging=false}
 });
 $("#main").addEventListener("scroll",hideMenu);
