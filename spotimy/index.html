@@ -392,13 +392,13 @@ function curTime(){
  if(S.cur.url)return el.currentTime||0;
  return S.playing?synth.time():S.pausedAt;
 }
-function engineStop(){if(synth.timer||synth.bus)synth.stop();if(el)el.pause();if(S.cur&&S.cur.sp&&SP.player)try{SP.player.pause()}catch(e){}}
+function engineStop(keepSp){if(synth.timer||synth.bus)synth.stop();if(el)el.pause();if(S.cur&&S.cur.sp&&!keepSp)spPause()}
 function startTrack(t,off=0){
- ensureAudio();engineStop();
+ ensureAudio();engineStop(t.sp);
  S.recent=[t.id,...S.recent.filter(x=>x!==t.id)].slice(0,12);saveUser();
  S.cur=t;S.playing=true;S.pausedAt=off;
  if(t.url){el.src=t.url;const go=()=>{if(off)el.currentTime=off};el.onloadedmetadata=()=>{go();if(isFinite(el.duration)){t.dur=el.duration}paintPlayer()};el.play().catch(()=>{});}
- else if(t.sp){SP.started=false;SP.pos=off*1000;SP.stamp=performance.now();SP.paused=false;try{SP.player&&SP.player.activateElement()}catch(e){}spPlay(t,off)}
+ else if(t.sp){SP.started=false;SP.maxPos=0;SP.gen=(SP.gen||0)+1;SP.pos=off*1000;SP.stamp=performance.now();SP.paused=false;try{SP.player&&SP.player.activateElement()}catch(e){}spPlay(t,off)}
  else synth.start(t,off);
  paintAll();
 }
@@ -413,17 +413,17 @@ function togglePlay(){
  if(!S.cur){playContext(local().map(t=>t.id));return}
  ensureAudio();
  if(S.playing){
-  if(S.cur.sp){SP.pos=curTime()*1000;SP.stamp=performance.now();SP.paused=true;try{SP.player.pause()}catch(e){}}else if(S.cur.url)el.pause();else{S.pausedAt=synth.time();synth.stop()}
+  if(S.cur.sp){SP.pos=curTime()*1000;SP.stamp=performance.now();SP.paused=true;spPause()}else if(S.cur.url)el.pause();else{S.pausedAt=synth.time();synth.stop()}
   S.playing=false;
  }else{
-  if(S.cur.sp){SP.paused=false;SP.stamp=performance.now();try{SP.player.resume()}catch(e){}}else if(S.cur.url)el.play().catch(()=>{});else synth.start(S.cur,S.pausedAt);
+  if(S.cur.sp){SP.paused=false;SP.stamp=performance.now();spResume()}else if(S.cur.url)el.play().catch(()=>{});else synth.start(S.cur,S.pausedAt);
   S.playing=true;
  }
  paintPlayer();
 }
 function seekTo(s){
  if(!S.cur)return;
- if(S.cur.sp){SP.pos=s*1000;SP.stamp=performance.now();try{SP.player.seek(Math.round(s*1000))}catch(e){}}
+ if(S.cur.sp){SP.pos=s*1000;SP.stamp=performance.now();spSeek(Math.round(s*1000))}
  else if(S.cur.url){el.currentTime=s}
  else if(S.playing)synth.start(S.cur,s);else S.pausedAt=s;
 }
@@ -547,10 +547,12 @@ function jmGenres(){
 }
 
 /* ---------- Spotify (login PKCE + Web Playback SDK; exige conta Premium) ---------- */
-const SP=Object.assign({id:store.get("spm.sp.id",""),token:"",exp:0,refresh:"",player:null,deviceId:null,pos:0,stamp:0,paused:true,started:false},store.get("spm.sp.tok",{}));
+const SP=Object.assign({id:store.get("spm.sp.id",""),token:"",exp:0,refresh:"",player:null,deviceId:null,pos:0,stamp:0,paused:true,started:false,forceRemote:store.get("spm.sp.remote",false)},store.get("spm.sp.tok",{}));
 const SP_REDIR=location.origin+location.pathname.replace(/index\.html$/,"");
 const SP_SCOPES="streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative";
 const spOn=()=>!!SP.refresh;
+const SP_MOBILE=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/i.test(navigator.platform||""));
+const spRemote=()=>SP_MOBILE||!!SP.sdkFailed||!!SP.forceRemote;
 const rand=n=>{const c="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";return Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>c[b%c.length]).join("")};
 const b64url=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 function spErr(e){return e&&e.status===403?"O Spotify recusou o acesso. Confira se sua conta é Premium e se você é o dono do app no painel do Spotify.":e&&e.status===429?"Muitas requisições ao Spotify. Tente de novo em instantes.":"Não consegui falar com o Spotify. Tente conectar de novo."}
@@ -580,7 +582,7 @@ async function spCallback(){
  try{history.replaceState({},"",SP_REDIR)}catch(e){}
  if(q.get("error")){toast("Login do Spotify cancelado");return}
  if(!a||q.get("state")!==a.st){toast("Login do Spotify inválido. Tente de novo.");return}
- try{await spTokenReq({grant_type:"authorization_code",code:q.get("code"),redirect_uri:SP_REDIR,code_verifier:a.ver});toast("Spotify conectado")}
+ try{await spTokenReq({grant_type:"authorization_code",code:q.get("code"),redirect_uri:SP_REDIR,code_verifier:a.ver});toast(SP_MOBILE?"Spotify conectado. Neste aparelho o Spotimy controla o app do Spotify, deixe-o instalado.":"Spotify conectado")}
  catch(e){toast("Não consegui conectar ao Spotify. Confira o Client ID e a Redirect URI.")}
  store.set("spm.sp.auth",null);
 }
@@ -689,7 +691,7 @@ function spPlayer(){
    p.addListener("player_state_changed",spState);
    p.addListener("account_error",()=>fail("O player do Spotify exige conta Premium."));
    p.addListener("authentication_error",()=>fail("Falha de autenticação no Spotify. Conecte de novo."));
-   p.addListener("initialization_error",()=>fail("Este navegador não suporta o player do Spotify."));
+   p.addListener("initialization_error",()=>{SP.sdkFailed=true;fail("Este navegador não toca Spotify. Vou controlar o app do Spotify.")});
    p.connect();
    setTimeout(()=>rej(new Error("timeout")),15000);
   });
@@ -697,13 +699,75 @@ function spPlayer(){
  SP.pp.catch(()=>{SP.pp=null});
  return SP.pp;
 }
+function spPause(){
+ if(spRemote())spApi("/me/player/pause",{method:"PUT"}).catch(()=>{});
+ else try{SP.player&&SP.player.pause()}catch(e){}
+}
+function spResume(){
+ if(spRemote())spApi("/me/player/play"+(SP.deviceId?"?device_id="+SP.deviceId:""),{method:"PUT"}).catch(()=>{});
+ else try{SP.player&&SP.player.resume()}catch(e){}
+}
+function spSeek(ms){
+ if(spRemote())spApi("/me/player/seek?position_ms="+ms,{method:"PUT"}).catch(()=>{});
+ else try{SP.player&&SP.player.seek(ms)}catch(e){}
+}
+/* modo "controle remoto": toca no app do Spotify do aparelho (celular, tablet, caixa de som) */
+async function spPickDevice(){
+ let ds;
+ try{const j=await spApi("/me/player/devices");ds=((j&&j.devices)||[]).filter(d=>!d.is_restricted)}catch(e){return null}
+ const d=ds.find(d=>d.is_active)||ds.find(d=>/smartphone|tablet/i.test(d.type))||ds[0];
+ if(!d){const e=new Error("sem aparelho");e.noDevice=true;throw e}
+ SP.deviceId=d.id;return d.id;
+}
+let spPoll;
+function spPollStart(){clearInterval(spPoll);spPoll=setInterval(spPollTick,1500)}
+async function spPollTick(){
+ const cur=S.cur;
+ if(!spRemote()||!cur||!cur.sp){clearInterval(spPoll);return}
+ const g=SP.gen;let st;
+ try{st=await spApi("/me/player")}catch(e){return}
+ if(g!==SP.gen||!S.cur||!S.cur.sp)return;
+ spRemoteState(st);
+}
+function spRemoteState(st){
+ const cur=S.cur;if(!cur||!cur.sp)return;
+ const it=st&&st.item,end=cur.dur*1000-8000;
+ if(it&&it.uri!==cur.uri){
+  const idx=S.queue.findIndex((id,i)=>i>S.qi&&T(id)&&T(id).uri===it.uri);
+  if(idx>=0&&SP.started){ // o Spotify seguiu sozinho para a próxima faixa da fila
+   S.qi=idx;S.cur=T(S.queue[idx]);SP.maxPos=0;SP.pos=st.progress_ms||0;SP.stamp=performance.now();SP.paused=!st.is_playing;S.playing=!!st.is_playing;
+   if(it.duration_ms)S.cur.dur=it.duration_ms/1000;
+   S.recent=[S.cur.id,...S.recent.filter(x=>x!==S.cur.id)].slice(0,12);saveUser();paintAll();return;
+  }
+  if(SP.started&&SP.maxPos>end){SP.started=false;onEnd()}
+  return;
+ }
+ if(!it){if(SP.started&&SP.maxPos>end){SP.started=false;onEnd()}return}
+ SP.pos=st.progress_ms||0;SP.stamp=performance.now();SP.paused=!st.is_playing;
+ if(it.duration_ms)cur.dur=it.duration_ms/1000;
+ SP.maxPos=Math.max(SP.maxPos||0,SP.pos);
+ if(st.is_playing)SP.started=true;
+ const was=S.playing;S.playing=!!st.is_playing;if(was!==S.playing)paintPlayer();
+ if(SP.started&&!st.is_playing&&SP.maxPos>end&&(SP.pos<2000||SP.pos>=cur.dur*1000-3000)){SP.started=false;onEnd()}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&S.cur&&S.cur.sp&&spRemote())spPollTick()});
 async function spPlay(t,off){
+ const wasRemote=spRemote();
  try{
-  await spPlayer();
-  await spApi("/me/player/play?device_id="+SP.deviceId,{method:"PUT",body:JSON.stringify({uris:[t.uri],position_ms:Math.round(off*1000)})});
+  let dev,uris=[t.uri];
+  if(wasRemote){
+   dev=await spPickDevice();
+   if(S.repeat!==2&&S.queue[S.qi]===t.id){ // manda também as próximas faixas Spotify: continuam tocando mesmo com a tela bloqueada
+    for(let i=S.qi+1;i<S.queue.length&&uris.length<30;i++){const n=T(S.queue[i]);if(n&&n.sp)uris.push(n.uri);else break}
+   }
+  }else{await spPlayer();dev=SP.deviceId}
+  await spApi("/me/player/play"+(dev?"?device_id="+dev:""),{method:"PUT",body:JSON.stringify({uris,position_ms:Math.round(off*1000)})});
+  if(wasRemote)spPollStart();
  }catch(e){
+  if(!wasRemote&&e&&(e.message==="sdk"||e.message==="timeout"))SP.sdkFailed=true;
+  if(!wasRemote&&spRemote()&&S.cur===t)return spPlay(t,off);
   if(S.cur===t){S.playing=false;paintPlayer()}
-  toast(e&&e.status?spErr(e):"Não consegui iniciar o player do Spotify.");
+  toast(e&&(e.noDevice||e.status===404)?"Abra o app do Spotify neste aparelho, toque qualquer música uma vez e tente de novo.":e&&e.status?spErr(e):"Não consegui iniciar o Spotify.");
  }
 }
 
@@ -776,7 +840,8 @@ function viewLibrary(){
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar mp3 do dispositivo</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="jamendo">${JMKEY?"Jamendo conectado ✓ (trocar chave)":"Conectar ao Jamendo"}</button>
-   <button class="qt" style="padding:12px 18px;gap:8px" data-act="spotify">${spOn()?"Spotify conectado ✓ (desconectar)":"Conectar ao Spotify (Premium)"}</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="spotify">${spOn()?"Spotify conectado ✓ (desconectar)":"Conectar ao Spotify (Premium)"}</button>${spOn()&&!SP_MOBILE?`
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="spmode">Spotify: ${SP.forceRemote?"controlando o app":"tocando no navegador"}</button>`:""}
   </div>
   <div class="grid" style="margin-top:20px">
    <div class="card" data-pl="liked" role="button" tabindex="0">${likedCover(200)}<b>Músicas Curtidas</b><small>${S.liked.size} músicas</small></div>
@@ -900,6 +965,7 @@ function handleAct(a,e){
   case"queue":S.showQueue=!S.showQueue;paintPlayer();break;
   case"qplay":{const i=+a.dataset.i;if(S.queue[i]){S.qi=i;startTrack(T(S.queue[i]))}break}
   case"spotify":spConnect();break;
+  case"spmode":SP.forceRemote=!SP.forceRemote;store.set("spm.sp.remote",SP.forceRemote);toast(SP.forceRemote?"O Spotimy vai controlar o app do Spotify":"O Spotify vai tocar neste navegador");render();break;
   case"jamendo":{const v=prompt("Cole seu client_id do Jamendo (grátis em devportal.jamendo.com).\nDeixe vazio para desconectar:",JMKEY);if(v===null)break;JMKEY=v.trim();store.set("spm.jm",JMKEY);S.jmLists={};S.jmQ={q:"",ids:[]};toast(JMKEY?"Jamendo conectado":"Jamendo desconectado");render();break}
   case"playrow":{const l=getList(a.dataset.ctx);const ids=l?l.ids:[...document.querySelectorAll("#main .row")].map(r=>r.dataset.tid);playContext(ids.length?ids:local().map(t=>t.id),id);break}
   case"playlist":{e.stopPropagation();const l=getList(id);if(!l)break;if(l.loading){ensureList(id).then(()=>{const l2=getList(id);if(l2.ids.length)playContext(l2.ids)});break}
@@ -939,7 +1005,7 @@ addEventListener("resize",hideMenu);
 
 /* ---------- boot ---------- */
 paintAll();render();
-spCallback().then(()=>{if(spOn())spPlayer().catch(()=>{});render();paintSide()});
+spCallback().then(()=>{if(spOn()&&!spRemote())spPlayer().catch(()=>{});render();paintSide()});
 DB.all().then(rs=>{let n=0;rs.forEach(r=>{if(!T(r.id)){addLocal(r);n++}});if(n){paintSide();render()}}).catch(()=>{});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 </script>
