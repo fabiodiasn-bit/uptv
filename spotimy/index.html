@@ -131,6 +131,12 @@ button.qi:hover{background:#2a2a2a}
 .qi small{color:var(--muted);font-size:12px}
 .qi>div{min-width:0}
 .qi.now b{color:var(--accent)}
+[hidden]{display:none!important}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.chip{padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.1);font-size:14px;font-weight:600}
+.chip:hover{background:rgba(255,255,255,.18)}
+.chip.on{background:#fff;color:#000}
+.chip small{opacity:.65;font-weight:500;margin-left:6px}
 .mnav{display:none}
 @media(max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:1fr auto auto;gap:0;padding:0}
@@ -356,10 +362,21 @@ const S={
  view:{n:"home"},cur:null,playing:false,pausedAt:0,
  queue:[],qi:-1,orig:[],shuffle:false,repeat:0,
  vol:store.get("spm.vol",.7),muted:false,
- recent:store.get("spm.recent",[]),jmLists:{},jmQ:{q:"",ids:[]},showQueue:false,spPls:[],spLoaded:false,spQ:{q:"",ids:[]}
+ recent:store.get("spm.recent",[]),jmLists:{},jmQ:{q:"",ids:[]},showQueue:false,spPls:[],spLoaded:false,spQ:{q:"",ids:[]},srcF:store.get("spm.srcf","all")
 };
 const T=id=>S.tracks.find(t=>t.id===id);
 const local=()=>S.tracks.filter(t=>!t.remote);
+const srcOf=t=>t.sp?"sp":t.remote?"jm":"local";
+const srcOn=k=>S.srcF==="all"||S.srcF===k;
+function srcChips(){
+ const c=(k,l,ok)=>`<button class="chip ${S.srcF===k?"on":""}" data-src="${k}">${l}${ok===false?"<small>conectar</small>":""}</button>`;
+ return `<div class="chips">${c("all","Tudo")}${c("local","Meus mp3")}${c("jm","Jamendo",!!JMKEY)}${c("sp","Spotify",spOn())}</div>`;
+}
+function setSrc(k){
+ if(k==="jm"&&!JMKEY){handleAct({dataset:{act:"jamendo"}},{});return}
+ if(k==="sp"&&!spOn()){spConnect();return}
+ S.srcF=k;store.set("spm.srcf",k);render();
+}
 const saveUser=()=>{
  store.set("spm.playlists",S.playlists);store.set("spm.liked",[...S.liked]);store.set("spm.recent",S.recent);
  const keep=new Set([...S.liked,...S.recent,...S.playlists.flatMap(p=>p.ids)]);
@@ -375,6 +392,7 @@ function tagList(){return [...new Set(local().map(t=>t.tag))]}
 function hueOf(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
 function getList(id){
  if(id==="liked")return{id,name:"Músicas Curtidas",ids:S.tracks.filter(t=>S.liked.has(t.id)).map(t=>t.id),kind:"liked",desc:"Suas músicas favoritas"};
+ if(id.startsWith("src:")){const k=id.slice(4);return{id,name:k==="jm"?"Salvas do Jamendo":"Salvas do Spotify",ids:S.tracks.filter(t=>srcOf(t)===k).map(t=>t.id),kind:"mix",hue:hueOf(k)}}
  if(id.startsWith("sp:")){const ids=S.jmLists[id],m=S.spPls.find(p=>p.id===id);return{id,name:id==="sp:q"?"Busca no Spotify":(m?m.name:"Spotify"),ids:(ids||[]).filter(T),kind:"mix",hue:hueOf(id),loading:!ids}}
  if(id==="recent")return{id,name:"Tocadas recentemente",ids:S.recent.filter(T),kind:"mix",hue:280};
  if(id.startsWith("jm:")){const k=id.slice(3),ids=S.jmLists[k];return{id,name:JM_NAMES[k]||("Jamendo · "+k),ids:(ids||[]).filter(T),kind:"mix",hue:hueOf(k),loading:!ids}}
@@ -532,7 +550,7 @@ let jmTimer;
 function fillJmSearch(q,delay){
  const box=$("#jm-res");if(!box)return;
  q=q.trim();
- if(!JMKEY||!q){box.innerHTML="";return}
+ if(!JMKEY||!q||!srcOn("jm")){box.innerHTML="";return}
  const draw=()=>{const b=$("#jm-res");if(!b||(S.view.q||"").trim()!==q)return;const ids=S.jmQ.ids.filter(T);b.innerHTML=`<h2>No Jamendo</h2>`+(ids.length?listTable(ids,"jm:q"):`<div class="empty">Nada encontrado no Jamendo.</div>`)};
  if(S.jmQ.q===q){draw();return}
  box.innerHTML=`<h2>No Jamendo</h2><div class="empty">Buscando…</div>`;
@@ -651,7 +669,7 @@ let spTimer;
 function fillSpSearch(q,delay){
  const box=$("#sp-res");if(!box)return;
  q=q.trim();
- if(!spOn()||!q){box.innerHTML="";return}
+ if(!spOn()||!q||!srcOn("sp")){box.innerHTML="";return}
  const draw=()=>{const b=$("#sp-res");if(!b||(S.view.q||"").trim()!==q)return;const ids=S.spQ.ids.filter(T);b.innerHTML=`<h2>No Spotify</h2>`+(ids.length?listTable(ids,"sp:q"):`<div class="empty">Nada encontrado no Spotify.</div>`)};
  if(S.spQ.q===q){draw();return}
  box.innerHTML=`<h2>No Spotify</h2><div class="empty">Buscando…</div>`;
@@ -807,35 +825,37 @@ function cardT(t,ctx){return `<div class="card" data-act="playone" data-id="${t.
 function viewHome(){
  const h=new Date().getHours(),g=h<5?"Boa madrugada":h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
  const tags=tagList();
- const quick=[{id:"liked",name:"Músicas Curtidas",c:likedCover(64)},{id:"all",name:"Todas as músicas",c:mixCover(300,64)}]
-  .concat(tags.slice(0,4).map(t=>({id:"mix:"+t,name:"Mix "+t,c:mixCover(hueOf(t),64)})));
- const recent=local().slice(0,6),rec=S.recent.map(T).filter(Boolean).slice(0,6);
- return `<div class="pad"><h1>${g}</h1>
+ const showL=srcOn("local");
+ const quick=[{id:"liked",name:"Músicas Curtidas",c:likedCover(64)}].concat(showL?[{id:"all",name:"Todas as músicas",c:mixCover(300,64)}].concat(tags.slice(0,4).map(t=>({id:"mix:"+t,name:"Mix "+t,c:mixCover(hueOf(t),64)}))):[]);
+ const recent=local().slice(0,6),rec=S.recent.map(T).filter(t=>t&&srcOn(srcOf(t))).slice(0,6);
+ return `<div class="pad">${srcChips()}<h1>${g}</h1>
   <div class="quick">${quick.map(q=>`<button class="qt" data-pl="${esc(q.id)}">${q.c}<span>${esc(q.name)}</span></button>`).join("")}</div>
-  <h2>Feitos para você</h2>
-  <div class="grid">${tags.map(tg=>{const l=getList("mix:"+tg);return `<div class="card" data-pl="mix:${esc(tg)}" role="button" tabindex="0">${mixCover(hueOf(tg),200)}<button class="fab" data-act="playlist" data-id="mix:${esc(tg)}" aria-label="Tocar">${I.play}</button><b>Mix ${esc(tg)}</b><small>${l.ids.slice(0,3).map(i=>esc(T(i).artist)).filter((v,i,a)=>a.indexOf(v)===i).join(", ")} e mais</small></div>`}).join("")}</div>
+  <h2 ${showL?"":"hidden"}>Feitos para você</h2>
+  <div class="grid" ${showL?"":"hidden"}>${tags.map(tg=>{const l=getList("mix:"+tg);return `<div class="card" data-pl="mix:${esc(tg)}" role="button" tabindex="0">${mixCover(hueOf(tg),200)}<button class="fab" data-act="playlist" data-id="mix:${esc(tg)}" aria-label="Tocar">${I.play}</button><b>Mix ${esc(tg)}</b><small>${l.ids.slice(0,3).map(i=>esc(T(i).artist)).filter((v,i,a)=>a.indexOf(v)===i).join(", ")} e mais</small></div>`}).join("")}</div>
   ${rec.length?`<h2>Tocadas recentemente</h2><div class="grid">${rec.map(t=>cardT(t,"recent")).join("")}</div>`:""}
-  <h2>Destaques</h2>
-  <div class="grid">${recent.map(t=>cardT(t,"all")).join("")}</div>
-  <div id="jm-home"></div>
-  <div id="sp-home"></div>
+  <h2 ${showL?"":"hidden"}>Destaques</h2>
+  <div class="grid" ${showL?"":"hidden"}>${recent.map(t=>cardT(t,"all")).join("")}</div>
+  ${srcOn("jm")?`<div id="jm-home"></div>`:""}
+  ${srcOn("sp")?`<div id="sp-home"></div>`:""}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:30px">${JMKEY?"":`<button class="qt" style="padding:14px 18px" data-act="jamendo">Conectar ao Jamendo e ouvir milhares de músicas</button>`}${spOn()?"":`<button class="qt" style="padding:14px 18px" data-act="spotify">Conectar ao Spotify (Premium)</button>`}</div>
  </div>`;
 }
 function viewSearch(){
  const q=S.view.q||"";
  const gen=tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("");
- return `<div class="pad"><div class="search">${I.search}<input id="q" type="search" placeholder="O que você quer ouvir?" value="${esc(q)}" autocomplete="off" aria-label="Buscar"></div>
+ return `<div class="pad">${srcChips()}<div class="search">${I.search}<input id="q" type="search" placeholder="O que você quer ouvir?" value="${esc(q)}" autocomplete="off" aria-label="Buscar"></div>
   <div id="results">${resultsHTML(q,gen)}</div><div id="jm-res"></div><div id="sp-res"></div></div>`;
 }
 function resultsHTML(q,gen){
  q=q.trim().toLowerCase();
- if(!q)return `<h2>Navegar por todas</h2><div class="genres">${gen||tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("")}</div>`+jmGenres();
+ if(!q)return (srcOn("local")?`<h2>Navegar por todas</h2><div class="genres">${gen||tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("")}</div>`:"")+(srcOn("jm")?jmGenres():"");
+ if(!srcOn("local"))return "";
  const ids=local().filter(t=>[t.title,t.artist,t.album,t.tag].some(s=>s.toLowerCase().includes(q))).map(t=>t.id);
+ if(!ids.length&&S.srcF==="all"&&(JMKEY||spOn()))return "";
  return `<h2>Músicas</h2>`+(ids.length?listTable(ids,"search:"+q):`<div class="empty">Nenhum resultado para “${esc(q)}”.</div>`);
 }
 function viewLibrary(){
- return `<div class="pad"><h1>Sua Biblioteca</h1>
+ return `<div class="pad"><h1>Sua Biblioteca</h1>${srcChips()}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar mp3 do dispositivo</button>
@@ -847,7 +867,7 @@ function viewLibrary(){
    <div class="card" data-pl="liked" role="button" tabindex="0">${likedCover(200)}<b>Músicas Curtidas</b><small>${S.liked.size} músicas</small></div>
    ${S.playlists.map(p=>`<div class="card" data-pl="${esc(p.id)}" role="button" tabindex="0">${mixCover(hueOf(p.name),200)}<b>${esc(p.name)}</b><small>Playlist · ${p.ids.filter(T).length} músicas</small></div>`).join("")}
   </div>
-  <h2>Todas as músicas</h2>${listTable(local().map(t=>t.id),"all")}</div>`;
+  ${S.srcF==="jm"||S.srcF==="sp"?`<h2>${S.srcF==="jm"?"Salvas do Jamendo":"Salvas do Spotify"}</h2>${listTable(getList("src:"+S.srcF).ids,"src:"+S.srcF)}`:`<h2>Todas as músicas</h2>${listTable(local().map(t=>t.id),"all")}`}</div>`;
 }
 function viewList(){
  const l=getList(S.view.id);
@@ -862,6 +882,7 @@ function viewList(){
  <div class="pad" style="padding-top:0">${l.loading?`<div class="empty">Carregando…</div>`:listTable(l.ids,l.id)}</div>`;
 }
 function render(){
+ if((S.srcF==="jm"&&!JMKEY)||(S.srcF==="sp"&&!spOn()))S.srcF="all";
  const m=$("#main"),sc=m.scrollTop;
  m.innerHTML=S.view.n==="home"?viewHome():S.view.n==="search"?viewSearch():S.view.n==="library"?viewLibrary():viewList();
  m.scrollTop=sc;
@@ -947,6 +968,7 @@ document.addEventListener("click",e=>{
   e.stopPropagation&&0;
   return handleAct(a,e);
  }
+ const sc=e.target.closest("[data-src]");if(sc)return setSrc(sc.dataset.src);
  const g=e.target.closest("[data-go]");if(g)return go(g.dataset.go);
  const p=e.target.closest("[data-pl]");if(p)return go("pl",{id:p.dataset.pl});
  const q=e.target.closest("[data-q]");if(q){S.view.q=q.dataset.q;render();return}
