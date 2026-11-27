@@ -122,6 +122,15 @@ input[type=range]:hover::-moz-range-thumb{width:12px;height:12px;border-radius:5
 #menu .lbl{color:var(--muted);font-size:12px;padding:8px 12px 4px}
 #toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#fff;color:#000;padding:10px 18px;border-radius:6px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
 #toast.on{opacity:1}
+#queue{position:fixed;right:16px;bottom:102px;width:340px;max-width:calc(100vw - 32px);max-height:60vh;overflow:auto;background:#181818;border-radius:10px;padding:6px 12px 12px;box-shadow:0 16px 40px rgba(0,0,0,.6);display:none;z-index:40}
+#queue h3{margin:10px 0 4px}
+#queue .lbl{color:var(--muted);font-size:13px;margin:12px 0 4px}
+.qi{display:flex;align-items:center;gap:12px;padding:6px;border-radius:6px;width:100%;text-align:left}
+button.qi:hover{background:#2a2a2a}
+.qi b{display:block;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qi small{color:var(--muted);font-size:12px}
+.qi>div{min-width:0}
+.qi.now b{color:var(--accent)}
 .mnav{display:none}
 @media(max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:1fr auto auto;gap:0;padding:0}
@@ -172,6 +181,7 @@ input[type=range]:hover::-moz-range-thumb{width:12px;height:12px;border-radius:5
   <nav class="mnav" id="mnav"></nav>
 </div>
 <div id="menu"></div>
+<div id="queue"></div>
 <div id="toast"></div>
 <input type="file" id="file" accept="audio/*" multiple hidden>
 
@@ -202,6 +212,7 @@ const I={
  more:'<svg viewBox="0 0 24 24"><path d="M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm12 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>',
  note:'<svg viewBox="0 0 24 24"><path d="M12 3v10.550A4 4 0 1 0 14 17V7h4V3z"/></svg>'
 };
+I.queue='<svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h12v2H3zm14-1h2v2h2v2h-2v2h-2v-2h-2v-2h2z"/></svg>';
 
 /* ---------- catálogo (faixas originais geradas por síntese) ---------- */
 const BUILTIN=[
@@ -338,26 +349,35 @@ const synth={
 
 /* ---------- estado ---------- */
 const S={
- tracks:BUILTIN.slice(),
+ tracks:BUILTIN.slice().concat(store.get("spm.cache",[])),
  playlists:store.get("spm.playlists",[]),
  liked:new Set(store.get("spm.liked",[])),
  view:{n:"home"},cur:null,playing:false,pausedAt:0,
  queue:[],qi:-1,orig:[],shuffle:false,repeat:0,
- vol:store.get("spm.vol",.7),muted:false
+ vol:store.get("spm.vol",.7),muted:false,
+ recent:store.get("spm.recent",[]),jmLists:{},jmQ:{q:"",ids:[]},showQueue:false
 };
 const T=id=>S.tracks.find(t=>t.id===id);
-const saveUser=()=>{store.set("spm.playlists",S.playlists);store.set("spm.liked",[...S.liked])};
-const cover=(t,size)=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,hsl(${t.hue},70%,55%),hsl(${(t.hue+45)%360},65%,28%));font-size:${Math.round(size*.42)}px">${I.note.replace("<svg",'<svg style="width:1em;height:1em;opacity:.85"')}</div>`;
+const local=()=>S.tracks.filter(t=>!t.remote);
+const saveUser=()=>{
+ store.set("spm.playlists",S.playlists);store.set("spm.liked",[...S.liked]);store.set("spm.recent",S.recent);
+ const keep=new Set([...S.liked,...S.recent,...S.playlists.flatMap(p=>p.ids)]);
+ store.set("spm.cache",S.tracks.filter(t=>t.remote&&keep.has(t.id)));
+};
+const cover=(t,size)=>t.img?`<div class="cov" style="width:${size}px;height:${size}px;background:#222 url('${esc(t.img)}') center/cover"></div>`:coverGen(t,size);
+const coverGen=(t,size)=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,hsl(${t.hue},70%,55%),hsl(${(t.hue+45)%360},65%,28%));font-size:${Math.round(size*.42)}px">${I.note.replace("<svg",'<svg style="width:1em;height:1em;opacity:.85"')}</div>`;
 const mixCover=(h,size,txt)=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,hsl(${h},70%,52%),hsl(${(h+60)%360},65%,25%));font-size:${Math.round(size*.36)}px">${txt||I.note.replace("<svg",'<svg style="width:1em;height:1em;opacity:.85"')}</div>`;
 const likedCover=size=>`<div class="cov" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,#6b2cff,#d8e6ff);font-size:${Math.round(size*.42)}px">${I.heartOn.replace("<svg",'<svg style="width:1em;height:1em;color:#fff"')}</div>`;
 
 /* playlists virtuais e do usuário */
-function tagList(){return [...new Set(S.tracks.map(t=>t.tag))]}
+function tagList(){return [...new Set(local().map(t=>t.tag))]}
 function hueOf(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
 function getList(id){
  if(id==="liked")return{id,name:"Músicas Curtidas",ids:S.tracks.filter(t=>S.liked.has(t.id)).map(t=>t.id),kind:"liked",desc:"Suas músicas favoritas"};
- if(id==="all")return{id,name:"Todas as músicas",ids:S.tracks.map(t=>t.id),kind:"mix",hue:300,desc:"Tudo do catálogo"};
- if(id.startsWith("mix:")){const tag=id.slice(4);return{id,name:"Mix "+tag,ids:S.tracks.filter(t=>t.tag===tag).map(t=>t.id),kind:"mix",hue:hueOf(tag),desc:"Seleção "+tag+" feita para você"}}
+ if(id==="recent")return{id,name:"Tocadas recentemente",ids:S.recent.filter(T),kind:"mix",hue:280};
+ if(id.startsWith("jm:")){const k=id.slice(3),ids=S.jmLists[k];return{id,name:JM_NAMES[k]||("Jamendo · "+k),ids:(ids||[]).filter(T),kind:"mix",hue:hueOf(k),loading:!ids}}
+ if(id==="all")return{id,name:"Todas as músicas",ids:local().map(t=>t.id),kind:"mix",hue:300,desc:"Tudo do catálogo"};
+ if(id.startsWith("mix:")){const tag=id.slice(4);return{id,name:"Mix "+tag,ids:local().filter(t=>t.tag===tag).map(t=>t.id),kind:"mix",hue:hueOf(tag),desc:"Seleção "+tag+" feita para você"}}
  const p=S.playlists.find(p=>p.id===id);
  return p?{id,name:p.name,ids:p.ids.filter(T),kind:"user",hue:hueOf(p.name),desc:"Playlist sua"}:null;
 }
@@ -372,6 +392,7 @@ function curTime(){
 function engineStop(){if(synth.timer||synth.bus)synth.stop();if(el)el.pause()}
 function startTrack(t,off=0){
  ensureAudio();engineStop();
+ S.recent=[t.id,...S.recent.filter(x=>x!==t.id)].slice(0,12);saveUser();
  S.cur=t;S.playing=true;S.pausedAt=off;
  if(t.url){el.src=t.url;const go=()=>{if(off)el.currentTime=off};el.onloadedmetadata=()=>{go();if(isFinite(el.duration)){t.dur=el.duration}paintPlayer()};el.play().catch(()=>{});}
  else synth.start(t,off);
@@ -385,7 +406,7 @@ function playContext(ids,startId){
  startTrack(T(startId));
 }
 function togglePlay(){
- if(!S.cur){playContext(S.tracks.map(t=>t.id));return}
+ if(!S.cur){playContext(local().map(t=>t.id));return}
  ensureAudio();
  if(S.playing){
   if(S.cur.url)el.pause();else{S.pausedAt=synth.time();synth.stop()}
@@ -443,10 +464,18 @@ function paintPlayer(){
   <button class="play" data-act="toggle" aria-label="${S.playing?"Pausar":"Tocar"}">${S.playing?I.pause:I.play}</button>
   <button class="ib" data-act="next" aria-label="Próxima">${I.next}</button>
   <button class="ib hide-m ${S.repeat?"on":""}" data-act="repeat" aria-label="Repetir" title="Repetir">${S.repeat===2?I.repeat1:I.repeat}</button>`;
- $("#right").innerHTML=`<button class="ib" style="font-size:22px" data-act="mute" aria-label="Volume">${S.muted||S.vol===0?I.mute:I.vol}</button><input type="range" id="vol" min="0" max="100" value="${Math.round(S.vol*100)}" aria-label="Volume">`;
+ $("#right").innerHTML=`<button class="ib" style="font-size:22px;${S.showQueue?"color:var(--accent)":""}" data-act="queue" aria-label="Fila" title="Fila">${I.queue}</button><button class="ib" style="font-size:22px" data-act="mute" aria-label="Volume">${S.muted||S.vol===0?I.mute:I.vol}</button><input type="range" id="vol" min="0" max="100" value="${Math.round(S.vol*100)}" aria-label="Volume">`;
  setRange($("#vol"));
- $("#td").textContent=fmt(curDur());
+ $("#td").textContent=fmt(curDur());paintQueue();
  document.querySelectorAll("[data-tid]").forEach(e=>e.classList.toggle("now",!!t&&e.dataset.tid===t.id));
+}
+function paintQueue(){
+ const q=$("#queue");if(!q)return;
+ q.style.display=S.showQueue?"block":"none";if(!S.showQueue)return;
+ const cur=S.cur,nx=S.queue.slice(S.qi+1,S.qi+51);
+ const row=(t,i)=>`<button class="qi" data-act="qplay" data-i="${i}">${cover(t,40)}<div><b>${esc(t.title)}</b><small>${esc(t.artist)}</small></div></button>`;
+ q.innerHTML=`<h3>Fila</h3>`+(cur?`<div class="lbl">Tocando agora</div><div class="qi now">${cover(cur,40)}<div><b>${esc(cur.title)}</b><small>${esc(cur.artist)}</small></div></div>`:`<div class="lbl">A fila está vazia. Toque uma música para começar.</div>`)
+  +(nx.length?`<div class="lbl">A seguir</div>`+nx.map((id,i)=>T(id)?row(T(id),S.qi+1+i):"").join(""):"");
 }
 function setRange(r){r.style.setProperty("--v",(r.value/(r.max||100))*100+"%")}
 let dragging=false;
@@ -458,6 +487,59 @@ function tick(){
  if(!dragging&&d){const s=$("#seek");s.value=Math.round(c/d*1000);setRange(s)}
 }
 setInterval(tick,250);
+
+/* ---------- Jamendo (opcional: precisa de client_id gratuito) ---------- */
+let JMKEY=store.get("spm.jm","");
+const JM_BASE="https://api.jamendo.com/v3.0";
+const JM_TAGS=[["pop","Pop"],["rock","Rock"],["electronic","Eletrônica"],["hiphop","Hip-hop"],["jazz","Jazz"],["lounge","Lounge"],["ambient","Ambiente"],["classical","Clássica"],["metal","Metal"],["reggae","Reggae"],["chillout","Chillout"],["folk","Folk"]];
+const JM_NAMES=Object.assign({popular:"Popular no Jamendo",q:"Busca no Jamendo"},Object.fromEntries(JM_TAGS.map(([k,n])=>[k,"Jamendo · "+n])));
+const jmErr=()=>"Não consegui carregar o Jamendo. Confira sua chave (client_id) e a conexão.";
+function jmTrack(x){
+ const id="j"+x.id;let t=S.tracks.find(t=>t.id===id);
+ if(!t){t={id,remote:true,title:x.name,artist:x.artist_name||"Artista",album:x.album_name||"Single",tag:"Jamendo",url:x.audio,img:x.image||x.album_image||"",dur:+x.duration||0,hue:hueOf(x.artist_name||x.name||"j")};S.tracks.push(t)}
+ return t;
+}
+async function jmFetch(p){
+ const u=new URL(JM_BASE+"/tracks/");
+ const q=Object.assign({client_id:JMKEY,format:"json",limit:30,audioformat:"mp32",imagesize:300},p);
+ for(const k in q)u.searchParams.set(k,q[k]);
+ const r=await fetch(u),j=await r.json();
+ if(j.headers&&j.headers.status!=="success")throw new Error(j.headers.error_message||"erro");
+ return (j.results||[]).filter(x=>x.audio).map(jmTrack);
+}
+async function jmLoad(key){
+ const ts=await jmFetch(key==="popular"?{order:"popularity_week"}:{tags:key,order:"popularity_total"});
+ S.jmLists[key]=ts.map(t=>t.id);return ts;
+}
+async function ensureJm(id){
+ const k=id.slice(3);if(S.jmLists[k]||k==="q")return;
+ try{await jmLoad(k)}catch(e){toast(jmErr());S.jmLists[k]=[]}
+ if(S.view.n==="pl"&&S.view.id===id)render();
+}
+async function fillJmHome(){
+ if(!JMKEY||!$("#jm-home"))return;
+ const draw=()=>{const b=$("#jm-home");if(!b)return;const l=getList("jm:popular");b.innerHTML=`<h2>Popular no Jamendo</h2><div class="grid">${l.ids.slice(0,12).map(i=>cardT(T(i),"jm:popular")).join("")}</div>`};
+ if(S.jmLists.popular){draw();return}
+ $("#jm-home").innerHTML=`<h2>Popular no Jamendo</h2><div class="empty">Carregando…</div>`;
+ try{await jmLoad("popular");draw()}catch(e){const b=$("#jm-home");if(b)b.innerHTML=`<h2>Popular no Jamendo</h2><div class="empty">${jmErr()}</div>`}
+}
+let jmTimer;
+function fillJmSearch(q,delay){
+ const box=$("#jm-res");if(!box)return;
+ q=q.trim();
+ if(!JMKEY||!q){box.innerHTML="";return}
+ const draw=()=>{const b=$("#jm-res");if(!b||(S.view.q||"").trim()!==q)return;const ids=S.jmQ.ids.filter(T);b.innerHTML=`<h2>No Jamendo</h2>`+(ids.length?listTable(ids,"jm:q"):`<div class="empty">Nada encontrado no Jamendo.</div>`)};
+ if(S.jmQ.q===q){draw();return}
+ box.innerHTML=`<h2>No Jamendo</h2><div class="empty">Buscando…</div>`;
+ clearTimeout(jmTimer);
+ jmTimer=setTimeout(async()=>{
+  try{const ts=await jmFetch({search:q,order:"relevance"});S.jmQ={q,ids:ts.map(t=>t.id)};S.jmLists.q=S.jmQ.ids;draw()}
+  catch(e){const b=$("#jm-res");if(b)b.innerHTML=`<h2>No Jamendo</h2><div class="empty">${jmErr()}</div>`}
+ },delay);
+}
+function jmGenres(){
+ return JMKEY?`<h2>Gêneros do Jamendo</h2><div class="genres">${JM_TAGS.map(([k,n])=>`<button class="gn" data-pl="jm:${k}" style="background:hsl(${hueOf(k)},55%,34%)">${n}</button>`).join("")}</div>`:"";
+}
 
 /* ---------- render: lateral / navegação ---------- */
 const NAV=[["home","Início",I.home],["search","Buscar",I.search],["library","Biblioteca",I.lib]];
@@ -491,30 +573,34 @@ function listTable(ids,ctxId){
  if(!ids.length)return `<div class="empty">Nada por aqui ainda.</div>`;
  return `<div class="th"><div style="text-align:center">#</div><div>Título</div><div class="alb">Álbum</div><div></div><div style="text-align:right">Duração</div><div></div></div>`+ids.map((id,i)=>rowHTML(T(id),i,ctxId)).join("");
 }
+function cardT(t,ctx){return `<div class="card" data-act="playone" data-id="${t.id}" data-ctx="${esc(ctx)}" role="button" tabindex="0">${cover(t,200)}<button class="fab" data-act="playone" data-id="${t.id}" data-ctx="${esc(ctx)}" aria-label="Tocar">${I.play}</button><b>${esc(t.title)}</b><small>${esc(t.artist)}</small></div>`}
 function viewHome(){
  const h=new Date().getHours(),g=h<5?"Boa madrugada":h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
  const tags=tagList();
  const quick=[{id:"liked",name:"Músicas Curtidas",c:likedCover(64)},{id:"all",name:"Todas as músicas",c:mixCover(300,64)}]
   .concat(tags.slice(0,4).map(t=>({id:"mix:"+t,name:"Mix "+t,c:mixCover(hueOf(t),64)})));
- const recent=S.tracks.slice(0,6);
+ const recent=local().slice(0,6),rec=S.recent.map(T).filter(Boolean).slice(0,6);
  return `<div class="pad"><h1>${g}</h1>
   <div class="quick">${quick.map(q=>`<button class="qt" data-pl="${esc(q.id)}">${q.c}<span>${esc(q.name)}</span></button>`).join("")}</div>
   <h2>Feitos para você</h2>
   <div class="grid">${tags.map(tg=>{const l=getList("mix:"+tg);return `<div class="card" data-pl="mix:${esc(tg)}" role="button" tabindex="0">${mixCover(hueOf(tg),200)}<button class="fab" data-act="playlist" data-id="mix:${esc(tg)}" aria-label="Tocar">${I.play}</button><b>Mix ${esc(tg)}</b><small>${l.ids.slice(0,3).map(i=>esc(T(i).artist)).filter((v,i,a)=>a.indexOf(v)===i).join(", ")} e mais</small></div>`}).join("")}</div>
-  <h2>Em alta</h2>
-  <div class="grid">${recent.map(t=>`<div class="card" data-act="playone" data-id="${t.id}" role="button" tabindex="0">${cover(t,200)}<button class="fab" data-act="playone" data-id="${t.id}" aria-label="Tocar">${I.play}</button><b>${esc(t.title)}</b><small>${esc(t.artist)}</small></div>`).join("")}</div>
+  ${rec.length?`<h2>Tocadas recentemente</h2><div class="grid">${rec.map(t=>cardT(t,"recent")).join("")}</div>`:""}
+  <h2>Destaques</h2>
+  <div class="grid">${recent.map(t=>cardT(t,"all")).join("")}</div>
+  <div id="jm-home"></div>
+  ${JMKEY?"":`<button class="qt" style="margin-top:30px;padding:14px 18px" data-act="jamendo">Conectar ao Jamendo e ouvir milhares de músicas</button>`}
  </div>`;
 }
 function viewSearch(){
  const q=S.view.q||"";
  const gen=tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("");
  return `<div class="pad"><div class="search">${I.search}<input id="q" type="search" placeholder="O que você quer ouvir?" value="${esc(q)}" autocomplete="off" aria-label="Buscar"></div>
-  <div id="results">${resultsHTML(q,gen)}</div></div>`;
+  <div id="results">${resultsHTML(q,gen)}</div><div id="jm-res"></div></div>`;
 }
 function resultsHTML(q,gen){
  q=q.trim().toLowerCase();
- if(!q)return `<h2>Navegar por todas</h2><div class="genres">${gen||tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("")}</div>`;
- const ids=S.tracks.filter(t=>[t.title,t.artist,t.album,t.tag].some(s=>s.toLowerCase().includes(q))).map(t=>t.id);
+ if(!q)return `<h2>Navegar por todas</h2><div class="genres">${gen||tagList().map(t=>`<button class="gn" data-q="${esc(t)}" style="background:hsl(${hueOf(t)},60%,38%)">${esc(t)}</button>`).join("")}</div>`+jmGenres();
+ const ids=local().filter(t=>[t.title,t.artist,t.album,t.tag].some(s=>s.toLowerCase().includes(q))).map(t=>t.id);
  return `<h2>Músicas</h2>`+(ids.length?listTable(ids,"search:"+q):`<div class="empty">Nenhum resultado para “${esc(q)}”.</div>`);
 }
 function viewLibrary(){
@@ -522,12 +608,13 @@ function viewLibrary(){
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="newpl">${I.plus.replace("<svg",'<svg style="width:20px;height:20px"')} Criar playlist</button>
    <button class="qt" style="padding:12px 18px;gap:8px" data-act="addfiles">${I.file.replace("<svg",'<svg style="width:20px;height:20px"')} Adicionar músicas do dispositivo</button>
+   <button class="qt" style="padding:12px 18px;gap:8px" data-act="jamendo">${JMKEY?"Jamendo conectado ✓ (trocar chave)":"Conectar ao Jamendo"}</button>
   </div>
   <div class="grid" style="margin-top:20px">
    <div class="card" data-pl="liked" role="button" tabindex="0">${likedCover(200)}<b>Músicas Curtidas</b><small>${S.liked.size} músicas</small></div>
    ${S.playlists.map(p=>`<div class="card" data-pl="${esc(p.id)}" role="button" tabindex="0">${mixCover(hueOf(p.name),200)}<b>${esc(p.name)}</b><small>Playlist · ${p.ids.filter(T).length} músicas</small></div>`).join("")}
   </div>
-  <h2>Todas as músicas</h2>${listTable(S.tracks.map(t=>t.id),"all")}</div>`;
+  <h2>Todas as músicas</h2>${listTable(local().map(t=>t.id),"all")}</div>`;
 }
 function viewList(){
  const l=getList(S.view.id);
@@ -539,15 +626,17 @@ function viewList(){
  <div class="bar"><button class="big" data-act="playlist" data-id="${esc(l.id)}" aria-label="Tocar">${playing?I.pause:I.play}</button>
   <button class="ib ${S.shuffle?"on":""}" style="${S.shuffle?"color:var(--accent)":""}" data-act="shuffle" aria-label="Aleatório">${I.shuffle}</button>
   ${l.kind==="user"?`<button class="ib" data-act="rename" data-id="${esc(l.id)}" style="font-size:16px;font-weight:700">Renomear</button><button class="ib" data-act="delpl" data-id="${esc(l.id)}" style="font-size:16px;font-weight:700">Excluir</button>`:""}</div>
- <div class="pad" style="padding-top:0">${listTable(l.ids,l.id)}</div>`;
+ <div class="pad" style="padding-top:0">${l.loading?`<div class="empty">Carregando…</div>`:listTable(l.ids,l.id)}</div>`;
 }
 function render(){
  const m=$("#main"),sc=m.scrollTop;
  m.innerHTML=S.view.n==="home"?viewHome():S.view.n==="search"?viewSearch():S.view.n==="library"?viewLibrary():viewList();
  m.scrollTop=sc;
  document.querySelectorAll("[data-tid]").forEach(e=>e.classList.toggle("now",!!S.cur&&e.dataset.tid===S.cur.id));
+ if(S.view.n==="home")fillJmHome();
+ if(S.view.n==="search")fillJmSearch(S.view.q||"",0);
 }
-function go(n,extra={}){S.view=Object.assign({n},extra);$("#main").scrollTop=0;render();paintNav();paintSide();if(n==="search")setTimeout(()=>{const q=$("#q");if(q&&!extra.q)q.focus()},0)}
+function go(n,extra={}){S.view=Object.assign({n},extra);$("#main").scrollTop=0;render();if(n==="pl"&&String(extra.id).startsWith("jm:"))ensureJm(extra.id);paintNav();paintSide();if(n==="search")setTimeout(()=>{const q=$("#q");if(q&&!extra.q)q.focus()},0)}
 
 /* ---------- menu / toast ---------- */
 const menu=$("#menu");
@@ -612,8 +701,11 @@ function handleAct(a,e){
   case"repeat":S.repeat=(S.repeat+1)%3;paintPlayer();break;
   case"mute":S.muted=!S.muted;applyVol();paintPlayer();break;
   case"like":e.stopPropagation();toggleLike(id);break;
-  case"playone":playContext(S.tracks.map(t=>t.id),id);break;
-  case"playrow":{const l=getList(a.dataset.ctx);const ids=l?l.ids:[...document.querySelectorAll("#main .row")].map(r=>r.dataset.tid);playContext(ids.length?ids:S.tracks.map(t=>t.id),id);break}
+  case"playone":{const l=a.dataset.ctx?getList(a.dataset.ctx):null;playContext(l&&l.ids.length?l.ids:local().map(t=>t.id),id);break}
+  case"queue":S.showQueue=!S.showQueue;paintPlayer();break;
+  case"qplay":{const i=+a.dataset.i;if(S.queue[i]){S.qi=i;startTrack(T(S.queue[i]))}break}
+  case"jamendo":{const v=prompt("Cole seu client_id do Jamendo (grátis em devportal.jamendo.com).\nDeixe vazio para desconectar:",JMKEY);if(v===null)break;JMKEY=v.trim();store.set("spm.jm",JMKEY);S.jmLists={};S.jmQ={q:"",ids:[]};toast(JMKEY?"Jamendo conectado":"Jamendo desconectado");render();break}
+  case"playrow":{const l=getList(a.dataset.ctx);const ids=l?l.ids:[...document.querySelectorAll("#main .row")].map(r=>r.dataset.tid);playContext(ids.length?ids:local().map(t=>t.id),id);break}
   case"playlist":{e.stopPropagation();const l=getList(id);if(!l)break;
    const same=S.cur&&S.orig.join()===l.ids.join();
    if(same&&S.cur)togglePlay();else playContext(l.ids);
@@ -639,8 +731,8 @@ document.addEventListener("keydown",e=>{
 });
 document.addEventListener("input",e=>{
  if(e.target.id==="seek"){dragging=true;setRange(e.target);$("#tc").textContent=fmt(e.target.value/1000*curDur())}
- else if(e.target.id==="vol"){S.vol=e.target.value/100;S.muted=false;applyVol();setRange(e.target);store.set("spm.vol",S.vol);$("#right button").innerHTML=S.vol===0?I.mute:I.vol}
- else if(e.target.id==="q"){S.view.q=e.target.value;$("#results").innerHTML=resultsHTML(S.view.q)}
+ else if(e.target.id==="vol"){S.vol=e.target.value/100;S.muted=false;applyVol();setRange(e.target);store.set("spm.vol",S.vol);$("#right [data-act=mute]").innerHTML=S.vol===0?I.mute:I.vol}
+ else if(e.target.id==="q"){S.view.q=e.target.value;$("#results").innerHTML=resultsHTML(S.view.q);fillJmSearch(S.view.q,450)}
 });
 document.addEventListener("change",e=>{
  if(e.target.id==="seek"){seekTo(e.target.value/1000*curDur());dragging=false}
